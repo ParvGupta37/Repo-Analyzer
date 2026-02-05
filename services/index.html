@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Repository Analyzer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 600px;
+            width: 100%;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+        
+        .input-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+            font-size: 14px;
+        }
+        
+        input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        button {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        .loading.active {
+            display: block;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .error {
+            background: #fee;
+            border: 2px solid #fcc;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            color: #c33;
+        }
+        
+        .example {
+            margin-top: 10px;
+            font-size: 13px;
+            color: #999;
+        }
+        
+        .example a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        
+        .example a:hover {
+            text-decoration: underline;
+        }
+        
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 1px solid #eee;
+        }
+        
+        .feature {
+            text-align: center;
+        }
+        
+        .feature-icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+        
+        .feature-text {
+            font-size: 13px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 GitHub Repository Analyzer</h1>
+        <p class="subtitle">Understand any GitHub repository instantly with AI-powered analysis</p>
+        
+        <div class="input-group">
+            <label for="repoUrl">GitHub Repository URL</label>
+            <input 
+                type="text" 
+                id="repoUrl" 
+                placeholder="https://github.com/username/repository"
+                value="https://github.com/DishaA06/ZBOT"
+            />
+            <div class="example">
+                Try: <a href="#" onclick="setExample('https://github.com/fastapi/fastapi'); return false;">FastAPI</a> · 
+                <a href="#" onclick="setExample('https://github.com/DishaA06/ZBOT'); return false;">ZBOT</a> · 
+                <a href="#" onclick="setExample('https://github.com/django/django'); return false;">Django</a>
+            </div>
+        </div>
+        
+        <button onclick="analyzeRepo()" id="analyzeBtn">
+            Analyze Repository
+        </button>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <div class="loading-text">Analyzing repository... This may take 30-60 seconds</div>
+        </div>
+        
+        <div id="error" class="error" style="display: none;"></div>
+        
+        <div class="features">
+            <div class="feature">
+                <div class="feature-icon">🎯</div>
+                <div class="feature-text">Project Overview</div>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">🛠️</div>
+                <div class="feature-text">Tech Stack</div>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">🏗️</div>
+                <div class="feature-text">Architecture</div>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">💬</div>
+                <div class="feature-text">Ask Questions</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function setExample(url) {
+            document.getElementById('repoUrl').value = url;
+        }
+        
+        async function analyzeRepo() {
+            const repoUrl = document.getElementById('repoUrl').value.trim();
+            const errorDiv = document.getElementById('error');
+            const loadingDiv = document.getElementById('loading');
+            const btn = document.getElementById('analyzeBtn');
+            
+            errorDiv.style.display = 'none';
+            
+            if (!repoUrl) {
+                errorDiv.textContent = 'Please enter a GitHub repository URL';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            if (!repoUrl.includes('github.com')) {
+                errorDiv.textContent = 'Please enter a valid GitHub URL';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.textContent = 'Starting Analysis...';
+            loadingDiv.classList.add('active');
+            
+            try {
+                const response = await fetch('http://localhost:8000/api/analyze-repo', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ repo_url: repoUrl })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Redirect to repository page with repo_id
+                    window.location.href = `repo.html?id=${data.repo_id}&url=${encodeURIComponent(repoUrl)}`;
+                } else {
+                    errorDiv.textContent = data.detail || 'Analysis failed. Please try again.';
+                    errorDiv.style.display = 'block';
+                    btn.disabled = false;
+                    btn.textContent = 'Analyze Repository';
+                    loadingDiv.classList.remove('active');
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Connection error. Make sure the server is running on http://localhost:8000';
+                errorDiv.style.display = 'block';
+                btn.disabled = false;
+                btn.textContent = 'Analyze Repository';
+                loadingDiv.classList.remove('active');
+            }
+        }
+        
+        // Allow Enter key to submit
+        document.getElementById('repoUrl').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') analyzeRepo();
+        });
+    </script>
+</body>
+</html>

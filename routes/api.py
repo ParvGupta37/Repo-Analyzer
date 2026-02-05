@@ -1,26 +1,19 @@
 """
-API routes for repository analysis and Q&A.
+Production API Routes - Hardened with proper async flow and persistence.
+Implements Option A: Status-based async flow.
 """
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.database import get_db
+from db.database import get_db, async_session_maker
 from models.pydantic_models import (
     AnalyzeRepoRequest, AnalyzeRepoResponse,
     AskQuestionRequest, AskQuestionResponse
 )
-from services.analysis_service import AnalysisService
+from services.analysis_service import AnalysisServiceFinal
 
 router = APIRouter()
-analysis_service = AnalysisService()
-
-
-async def run_analysis_background(repo_url: str, db: AsyncSession):
-    """Background task for repository analysis."""
-    try:
-        await analysis_service.analyze_repository(repo_url, db)
-    except Exception as e:
-        print(f"Background analysis failed for {repo_url}: {str(e)}")
+analysis_service = AnalysisServiceFinal()
 
 
 @router.post("/analyze-repo", response_model=AnalyzeRepoResponse)
@@ -30,61 +23,37 @@ async def analyze_repo(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Analyze a GitHub repository.
+    Start repository analysis (returns immediately with status='processing').
     
-    This endpoint initiates repository analysis in the background.
-    The analysis includes:
-    - Fetching repository metadata
-    - Analyzing code structure
-    - Generating tech stack insights
-    - Creating architecture summary
-    - Analyzing GitHub issues
-    - Generating contributor guide
+    Flow:
+    1. Validate URL
+    2. Create repo + analysis_session with status='processing'
+    3. Commit to database
+    4. Return immediately with repo_id and status
+    5. Background task does actual analysis
     """
     try:
-        # Validate URL format
+        # Validate URL
         if not request.repo_url or 'github.com' not in request.repo_url:
             raise HTTPException(
                 status_code=400,
                 detail="Invalid GitHub repository URL"
             )
         
-        # Parse URL to get owner and repo name
-        github_service = analysis_service.github
-        try:
-            owner, repo_name = github_service.parse_repo_url(request.repo_url)
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+        # Start analysis (synchronous setup)
+        result = await analysis_service.start_analysis(request.repo_url, db)
         
-        # Check if repository already exists
-        from sqlalchemy import select
-        from models.schemas import Repository
-        import uuid
+        repo_id = result['repo_id']
         
-        result = await db.execute(
-            select(Repository).where(Repository.repo_url == request.repo_url)
-        )
-        existing_repo = result.scalar_one_or_none()
-        
-        if existing_repo:
-            repo_id = existing_repo.id
-        else:
-            # Generate new repo_id but DON'T create the repository yet
-            # Let the background task create it with full metadata
-            repo_id = str(uuid.uuid4())
-        
-        # Start analysis in background with the repo_id
-        from db.database import async_session_maker
-        
+        # Background task for actual analysis (with NEW session)
         async def background_analysis():
+            """
+            Runs in background with its OWN database session.
+            This is critical for SQLite persistence.
+            """
             async with async_session_maker() as bg_db:
                 try:
-                    # Pass the repo_id to ensure consistency
-                    await analysis_service.analyze_repository(
-                        request.repo_url, 
-                        bg_db,
-                        repo_id=repo_id
-                    )
+                    await analysis_service.execute_analysis(repo_id, bg_db)
                 except Exception as e:
                     print(f"Background analysis error: {str(e)}")
                     import traceback
@@ -95,9 +64,11 @@ async def analyze_repo(
         return AnalyzeRepoResponse(
             repo_id=repo_id,
             status="processing",
-            message="Repository analysis started. Use the repo_id to ask questions once processing completes."
+            message="Analysis started. Use GET /api/status/{repo_id} to check progress."
         )
         
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:
@@ -107,18 +78,96 @@ async def analyze_repo(
         )
 
 
+@router.get("/status/{repo_id}")
+async def get_analysis_status(
+    repo_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get analysis status for a repository.
+    
+    Returns:
+        {
+            "repo_id": "...",
+            "status": "processing|completed|failed|not_found",
+            "started_at": "...",
+            "completed_at": "...",
+            "error_message": "..."
+        }
+    """
+    try:
+        status = await analysis_service.get_status(repo_id, db)
+        return status
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get status: {str(e)}"
+        )
+
+
+@router.get("/analysis/{repo_id}")
+async def get_analysis(
+    repo_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get complete analysis for a repository.
+    
+    Requirements:
+    - Analysis must be completed (status='completed')
+    - Returns frontend-ready structured JSON
+    - ZERO Gemini calls (reads from database only)
+    """
+    try:
+        analysis = await analysis_service.get_analysis(repo_id, db)
+        return analysis
+    except ValueError as e:
+        # Analysis not completed or not found
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve analysis: {str(e)}"
+        )
+
+
 @router.post("/ask", response_model=AskQuestionResponse)
 async def ask_question(
     request: AskQuestionRequest,
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Ask a question about an analyzed repository.
+    Answer question about analyzed repository.
     
-    This endpoint answers context-aware questions about the repository,
-    including file purposes, architecture, and implementation details.
+    Requirements:
+    - Analysis MUST be completed first
+    - Returns 400 if analysis not completed
+    - ZERO Gemini calls (uses stored data only)
+    - Idempotent and deterministic
     """
     try:
+        # Check status first
+        status = await analysis_service.get_status(request.repo_id, db)
+        
+        if status['status'] == 'not_found':
+            raise HTTPException(
+                status_code=404,
+                detail=f"Repository not found: {request.repo_id}"
+            )
+        
+        if status['status'] == 'processing':
+            raise HTTPException(
+                status_code=400,
+                detail="Analysis still in progress. Please wait for completion."
+            )
+        
+        if status['status'] == 'failed':
+            raise HTTPException(
+                status_code=400,
+                detail=f"Analysis failed: {status.get('error_message', 'Unknown error')}"
+            )
+        
+        # Status is 'completed' - safe to answer
         result = await analysis_service.answer_question(
             request.repo_id,
             request.question,
@@ -132,6 +181,8 @@ async def ask_question(
             created_at=result['created_at']
         )
         
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -143,5 +194,16 @@ async def ask_question(
 
 @router.get("/health")
 async def health_check():
-    """Health check endpoint."""
-    return {"status": "healthy", "service": "repo-analyzer"}
+    """Health check endpoint with system info."""
+    return {
+        "status": "healthy",
+        "service": "repo-analyzer-final",
+        "architecture": "production",
+        "features": {
+            "single_gemini_call": True,
+            "split_table_storage": True,
+            "status_based_async": True,
+            "proper_persistence": True,
+            "idempotent_qa": True
+        }
+    }

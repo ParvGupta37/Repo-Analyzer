@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Repository Analysis</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f7fa;
+            min-height: 100vh;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .header-content {
+            max-width: 1000px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .repo-info h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+        
+        .repo-url {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .back-btn {
+            background: rgba(255,255,255,0.2);
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            color: white;
+            font-weight: 600;
+            transition: background 0.3s;
+        }
+        
+        .back-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+        
+        .status-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .status-icon {
+            font-size: 24px;
+        }
+        
+        .status.processing .status-icon {
+            animation: spin 2s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .status-text {
+            flex: 1;
+        }
+        
+        .status-title {
+            font-weight: 600;
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+        
+        .status-desc {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .question-card {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .question-card h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+        
+        .input-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+            font-size: 14px;
+        }
+        
+        textarea {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 80px;
+            transition: all 0.3s;
+        }
+        
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        button {
+            padding: 14px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .quick-questions {
+            margin-top: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .quick-question {
+            background: #f0f0f0;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .quick-question:hover {
+            background: #e0e0e0;
+        }
+        
+        .answer-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            border-left: 4px solid #667eea;
+            display: none;
+        }
+        
+        .answer-card.show {
+            display: block;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .answer-header {
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #667eea;
+        }
+        
+        .answer-content {
+            color: #333;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+        
+        .loading-inline {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            margin-top: 20px;
+            color: #666;
+        }
+        
+        .loading-inline.active {
+            display: flex;
+        }
+        
+        .spinner-small {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        .history {
+            margin-top: 30px;
+        }
+        
+        .history h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+        
+        .history-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 3px solid #667eea;
+        }
+        
+        .history-question {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+        }
+        
+        .history-answer {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <div class="repo-info">
+                <h1 id="repoName">🔍 Repository Analysis</h1>
+                <div class="repo-url" id="repoUrl"></div>
+            </div>
+            <a href="index.html" class="back-btn">← Analyze Another</a>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="status-card">
+            <div class="status" id="statusDiv">
+                <div class="status-icon">⏳</div>
+                <div class="status-text">
+                    <div class="status-title">Analysis in Progress</div>
+                    <div class="status-desc">Please wait 30-60 seconds for the analysis to complete...</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="question-card">
+            <h2>💬 Ask Questions About This Repository</h2>
+            
+            <div class="input-group">
+                <label for="question">Your Question</label>
+                <textarea 
+                    id="question" 
+                    placeholder="What is this project about?"
+                >What is this project about?</textarea>
+                
+                <div class="quick-questions">
+                    <div class="quick-question" onclick="setQuestion('What is this project about?')">
+                        What is this project?
+                    </div>
+                    <div class="quick-question" onclick="setQuestion('What technologies are used?')">
+                        Tech stack?
+                    </div>
+                    <div class="quick-question" onclick="setQuestion('How is the code organized?')">
+                        Architecture?
+                    </div>
+                    <div class="quick-question" onclick="setQuestion('How can I contribute?')">
+                        How to contribute?
+                    </div>
+                    <div class="quick-question" onclick="setQuestion('What are the main features?')">
+                        Main features?
+                    </div>
+                </div>
+            </div>
+            
+            <button onclick="askQuestion()" id="askBtn">Ask Question</button>
+            
+            <div class="loading-inline" id="loadingInline">
+                <div class="spinner-small"></div>
+                <span>Getting answer...</span>
+            </div>
+            
+            <div class="answer-card" id="answerCard">
+                <div class="answer-header">💡 Answer</div>
+                <div class="answer-content" id="answerContent"></div>
+            </div>
+        </div>
+        
+        <div class="history" id="historySection" style="display: none;">
+            <h3>📝 Question History</h3>
+            <div id="historyList"></div>
+        </div>
+    </div>
+
+    <script>
+        // Get repo_id and URL from query parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const repoId = urlParams.get('id');
+        const repoUrl = urlParams.get('url');
+        
+        let analysisComplete = false;
+        let questionHistory = [];
+        
+        // Display repo info
+        if (repoUrl) {
+            const parts = repoUrl.split('github.com/')[1]?.split('/');
+            if (parts && parts.length >= 2) {
+                document.getElementById('repoName').textContent = `${parts[0]}/${parts[1]}`;
+            }
+            document.getElementById('repoUrl').textContent = repoUrl;
+        }
+        
+        // Check if repo_id exists
+        if (!repoId) {
+            window.location.href = 'index.html';
+        }
+        
+        // Check analysis status every 5 seconds
+        let statusCheckInterval = setInterval(checkAnalysisStatus, 5000);
+        checkAnalysisStatus(); // Check immediately
+        
+        async function checkAnalysisStatus() {
+            // Try to ask a simple question to see if analysis is complete
+            try {
+                const response = await fetch('http://localhost:8000/api/ask', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        repo_id: repoId, 
+                        question: 'test' 
+                    })
+                });
+                
+                if (response.ok) {
+                    // Analysis is complete
+                    analysisComplete = true;
+                    clearInterval(statusCheckInterval);
+                    updateStatus('complete');
+                }
+            } catch (error) {
+                // Still processing or error
+            }
+        }
+        
+        function updateStatus(status) {
+            const statusDiv = document.getElementById('statusDiv');
+            
+            if (status === 'complete') {
+                statusDiv.innerHTML = `
+                    <div class="status-icon">✅</div>
+                    <div class="status-text">
+                        <div class="status-title">Analysis Complete!</div>
+                        <div class="status-desc">You can now ask questions about this repository.</div>
+                    </div>
+                `;
+            }
+        }
+        
+        function setQuestion(text) {
+            document.getElementById('question').value = text;
+        }
+        
+        async function askQuestion() {
+            const question = document.getElementById('question').value.trim();
+            const answerCard = document.getElementById('answerCard');
+            const answerContent = document.getElementById('answerContent');
+            const loadingInline = document.getElementById('loadingInline');
+            const btn = document.getElementById('askBtn');
+            
+            if (!question) {
+                alert('Please enter a question');
+                return;
+            }
+            
+            answerCard.classList.remove('show');
+            loadingInline.classList.add('active');
+            btn.disabled = true;
+            
+            try {
+                const response = await fetch('http://localhost:8000/api/ask', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        repo_id: repoId, 
+                        question: question 
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    answerContent.textContent = data.answer;
+                    answerCard.classList.add('show');
+                    
+                    // Add to history
+                    questionHistory.unshift({
+                        question: question,
+                        answer: data.answer
+                    });
+                    updateHistory();
+                    
+                    // Mark analysis as complete
+                    if (!analysisComplete) {
+                        analysisComplete = true;
+                        clearInterval(statusCheckInterval);
+                        updateStatus('complete');
+                    }
+                } else {
+                    answerContent.textContent = `Error: ${data.detail || 'Failed to get answer'}`;
+                    answerCard.classList.add('show');
+                }
+            } catch (error) {
+                answerContent.textContent = `Connection error: ${error.message}`;
+                answerCard.classList.add('show');
+            } finally {
+                loadingInline.classList.remove('active');
+                btn.disabled = false;
+            }
+        }
+        
+        function updateHistory() {
+            const historySection = document.getElementById('historySection');
+            const historyList = document.getElementById('historyList');
+            
+            if (questionHistory.length > 0) {
+                historySection.style.display = 'block';
+                historyList.innerHTML = questionHistory.slice(0, 5).map(item => `
+                    <div class="history-item">
+                        <div class="history-question">Q: ${item.question}</div>
+                        <div class="history-answer">${item.answer.substring(0, 200)}${item.answer.length > 200 ? '...' : ''}</div>
+                    </div>
+                `).join('');
+            }
+        }
+        
+        // Allow Enter key (with Shift) to submit
+        document.getElementById('question').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                askQuestion();
+            }
+        });
+    </script>
+</body>
+</html>

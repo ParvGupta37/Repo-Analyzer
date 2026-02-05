@@ -1,13 +1,13 @@
 """
-Gemini 3 LLM service for generating analysis and answering questions.
-Uses the new Google GenAI SDK with Gemini 3 models.
-Includes fallback mock implementation if Gemini SDK is unavailable.
+Refactored Gemini 3 service - SINGLE API CALL architecture.
+Generates all analysis in one structured response to avoid rate limits.
 """
 import os
 import json
 from typing import Dict, List, Optional
+from pydantic import BaseModel, Field, validator
 
-# Try to import Google GenAI SDK, fall back to mock if unavailable
+# Try to import Google GenAI SDK
 try:
     from google import genai
     GEMINI_AVAILABLE = True
@@ -15,8 +15,85 @@ except ImportError:
     GEMINI_AVAILABLE = False
 
 
-class GeminiService:
-    """Service for interacting with Gemini 3 LLM or mock fallback."""
+# ============================================================================
+# STRUCTURED OUTPUT SCHEMA - Enforces deterministic, frontend-ready responses
+# ============================================================================
+
+class TechStackItem(BaseModel):
+    """Single technology in the stack."""
+    name: str = Field(..., max_length=50, description="Technology name")
+    category: str = Field(..., max_length=30, description="Category (Language/Framework/Database/Tool)")
+    version: Optional[str] = Field(None, max_length=20, description="Version if detected")
+
+
+class ComponentItem(BaseModel):
+    """Single architectural component."""
+    name: str = Field(..., max_length=50, description="Component name")
+    purpose: str = Field(..., max_length=200, description="What this component does")
+    files: List[str] = Field(default_factory=list, max_items=5, description="Key files")
+
+
+class FileInsight(BaseModel):
+    """Insight about a specific file."""
+    path: str = Field(..., max_length=200)
+    role: str = Field(..., max_length=30, description="entry_point/config/core/utility")
+    purpose: str = Field(..., max_length=150, description="One-line explanation")
+
+
+class RepositoryAnalysis(BaseModel):
+    """Complete repository analysis - single structured response."""
+    
+    # Core summary (short, scannable)
+    summary: str = Field(..., min_length=50, max_length=300, description="2-3 sentence project summary")
+    purpose: str = Field(..., max_length=150, description="What problem this solves")
+    
+    # Tech stack
+    tech_stack: List[TechStackItem] = Field(..., min_items=1, max_items=15)
+    primary_language: str = Field(..., max_length=30)
+    
+    # Architecture
+    architecture_pattern: str = Field(..., max_length=50, description="MVC/Microservices/Monolith/etc")
+    components: List[ComponentItem] = Field(default_factory=list, max_items=10)
+    data_flow: str = Field(..., max_length=300, description="How data moves through the system")
+    
+    # File organization
+    key_files: List[FileInsight] = Field(default_factory=list, max_items=10)
+    
+    # Setup and contribution
+    setup_steps: List[str] = Field(..., min_items=2, max_items=6, description="Setup steps as short strings")
+    contribution_areas: List[str] = Field(default_factory=list, max_items=5, description="Safe areas for new contributors")
+    
+    # Risks and limitations
+    risky_areas: List[str] = Field(default_factory=list, max_items=5, description="Areas requiring caution")
+    known_issues: List[str] = Field(default_factory=list, max_items=5, description="From GitHub issues analysis")
+    
+    # Metadata
+    confidence_score: float = Field(default=0.8, ge=0.0, le=1.0, description="Analysis confidence")
+    
+    @validator('summary', 'purpose', 'data_flow')
+    def no_fluff(cls, v):
+        """Remove common AI fluff phrases."""
+        fluff_phrases = [
+            "it's important to note",
+            "it should be noted",
+            "as mentioned",
+            "basically",
+            "essentially",
+            "in conclusion",
+            "to summarize"
+        ]
+        result = v
+        for phrase in fluff_phrases:
+            result = result.replace(phrase, "").replace(phrase.title(), "")
+        return result.strip()
+
+
+# ============================================================================
+# GEMINI SERVICE - Single call, validated output
+# ============================================================================
+
+class GeminiServiceV2:
+    """Refactored Gemini service - ONE call per repository analysis."""
     
     def __init__(self):
         self.api_key = os.getenv("GEMINI_API_KEY")
@@ -24,322 +101,226 @@ class GeminiService:
         self.model_name = None
         self.using_mock = False
         
-        # Allow selection between Gemini 3 Flash and Pro via environment variable
-        # Default to Flash for better speed/cost ratio
-        gemini_model = os.getenv("GEMINI_MODEL", "flash")  # Options: "flash" or "pro"
+        gemini_model = os.getenv("GEMINI_MODEL", "flash")
         
         if GEMINI_AVAILABLE and self.api_key:
-            # Initialize Google GenAI client
             self.client = genai.Client(api_key=self.api_key)
-            
-            # Select Gemini 3 model based on configuration
-            if gemini_model.lower() == "pro":
-                self.model_name = 'gemini-3-pro-preview'
-            else:
-                self.model_name = 'gemini-3-flash-preview'
+            self.model_name = 'gemini-3-pro-preview' if gemini_model.lower() == "pro" else 'gemini-3-flash-preview'
         else:
             self.using_mock = True
     
-    async def generate_content(self, prompt: str) -> str:
-        """Generate content using Gemini 3 or mock."""
+    async def analyze_repository(self, context: Dict) -> RepositoryAnalysis:
+        """
+        SINGLE API CALL to analyze entire repository.
+        Returns validated, structured, frontend-ready data.
+        """
+        prompt = self._build_unified_prompt(context)
+        
         if self.client and self.model_name:
             try:
-                # Use the new Google GenAI SDK syntax
                 response = self.client.models.generate_content(
                     model=self.model_name,
                     contents=prompt
                 )
-                return response.text
+                raw_text = response.text
+                
+                # Clean response (remove markdown fences if present)
+                if raw_text.strip().startswith("```"):
+                    raw_text = raw_text.split("```json")[-1].split("```")[0].strip()
+                elif raw_text.strip().startswith("{"):
+                    pass  # Already clean JSON
+                else:
+                    # Try to extract JSON from text
+                    import re
+                    json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
+                    if json_match:
+                        raw_text = json_match.group(0)
+                
+                # Parse and validate
+                data = json.loads(raw_text)
+                analysis = RepositoryAnalysis(**data)
+                return analysis
+                
+            except json.JSONDecodeError as e:
+                print(f"Gemini returned invalid JSON: {str(e)}")
+                return self._fallback_analysis(context)
             except Exception as e:
-                print(f"Gemini 3 API error: {str(e)}")
-                return self._mock_response(prompt)
+                print(f"Gemini API error: {str(e)}")
+                return self._fallback_analysis(context)
         else:
-            return self._mock_response(prompt)
+            return self._fallback_analysis(context)
     
-    def _mock_response(self, prompt: str) -> str:
-        """
-        Mock implementation that returns deterministic placeholder text.
-        Used when Gemini SDK is unavailable or API key is not configured.
-        """
-        if "PROJECT OVERVIEW" in prompt:
-            return """This repository appears to be a well-structured software project with clear organization and modern development practices. The codebase demonstrates professional software engineering principles with proper separation of concerns and modular architecture."""
+    def _build_unified_prompt(self, context: Dict) -> str:
+        """Build single comprehensive prompt for all analysis."""
         
-        elif "TECH STACK" in prompt:
-            return json.dumps([
-                {
-                    "name": "Python",
-                    "category": "Programming Language",
-                    "reasoning": "Primary language based on file extensions and project structure"
-                },
-                {
-                    "name": "FastAPI",
-                    "category": "Web Framework",
-                    "reasoning": "Detected from configuration files and import statements"
-                }
-            ])
+        repo_name = context.get('repo_name', 'Unknown')
+        primary_lang = context.get('primary_language', 'Unknown')
+        readme = (context.get('readme') or 'No README available')[:3000]
         
-        elif "ARCHITECTURE" in prompt:
-            components = [
-                {"name": "API Layer", "description": "Handles HTTP requests and responses"},
-                {"name": "Business Logic", "description": "Core application logic and processing"},
-                {"name": "Data Layer", "description": "Database interactions and persistence"}
-            ]
-            return json.dumps({
-                "overview": "The architecture follows a layered pattern with clear separation between API, business logic, and data layers.",
-                "components": components,
-                "data_flow": "Requests flow from API layer through business logic to data layer and back."
-            })
+        files_list = "\n".join([
+            f"- {f['path']} ({f.get('language', 'unknown')})"
+            for f in context.get('files', [])[:20]
+        ])
         
-        elif "ISSUES ANALYSIS" in prompt:
-            return json.dumps({
-                "recurring_problems": "Common issues include dependency management and configuration challenges.",
-                "risky_areas": "Areas requiring careful attention include authentication and data validation.",
-                "active_features": "Recent development focuses on performance optimization and user experience improvements."
-            })
+        config_files = [f['path'] for f in context.get('config_files', [])[:10]]
+        entry_files = [f['path'] for f in context.get('source_files', []) if f.get('role') == 'entry_point'][:5]
         
-        elif "CONTRIBUTOR GUIDE" in prompt:
-            return json.dumps({
-                "getting_started": "1. Clone the repository\n2. Install dependencies\n3. Set up configuration files\n4. Run tests to verify setup",
-                "safe_areas": "Documentation, test files, and utility functions are safe areas for new contributors.",
-                "caution_areas": "Core business logic and database schemas require careful review before modification.",
-                "feature_extension_guide": "Follow the existing patterns in the codebase. Add new features in dedicated modules and include comprehensive tests."
-            })
+        issues_summary = f"{len(context.get('open_issues', []))} open, {len(context.get('closed_issues', []))} recently closed"
         
-        elif "ANSWER THE QUESTION" in prompt:
-            # Extract question from prompt for context
-            question_lower = prompt.lower()
-            
-            if "purpose" in question_lower or "what does" in question_lower:
-                return "Based on the repository structure and codebase, this component handles specific functionality within the application. It integrates with other modules to provide core features."
-            elif "how" in question_lower:
-                return "The implementation follows standard patterns for this type of functionality. It uses appropriate libraries and frameworks to achieve its goals efficiently."
-            elif "why" in question_lower:
-                return "This design choice was likely made to ensure maintainability, scalability, and adherence to best practices in software development."
-            else:
-                return "Based on the repository analysis, the answer depends on the specific context and requirements. Please refer to the documentation and source code for detailed information."
+        # Extract issue titles for pattern detection
+        issue_titles = [
+            issue.get('title', '')
+            for issue in (context.get('open_issues', [])[:10] + context.get('closed_issues', [])[:5])
+        ]
         
-        else:
-            return "Analysis complete. This is a mock response - configure Gemini API key for detailed analysis."
-    
-    async def analyze_project_overview(self, context: Dict) -> str:
-        """Generate project overview from repository context."""
-        prompt = f"""
-Analyze this GitHub repository and provide a comprehensive PROJECT OVERVIEW.
+        prompt = f"""Analyze this GitHub repository and return ONLY valid JSON (no markdown, no prose).
 
-Repository: {context.get('repo_name')}
-Primary Language: {context.get('primary_language')}
+Repository: {repo_name}
+Primary Language: {primary_lang}
 
-README Content:
-{context.get('readme', 'No README available')[:2000]}
+README (first 3000 chars):
+{readme}
 
 Key Files:
-{self._format_file_list(context.get('files', [])[:10])}
+{files_list}
 
-Provide a clear, concise overview of what this project does, its main purpose, and key features.
-Write 2-3 paragraphs. Be specific and informative.
+Configuration Files: {', '.join(config_files) if config_files else 'None detected'}
+Entry Points: {', '.join(entry_files) if entry_files else 'Not identified'}
+
+GitHub Issues: {issues_summary}
+Recent Issue Patterns: {', '.join(issue_titles[:5]) if issue_titles else 'No issues'}
+
+CRITICAL REQUIREMENTS:
+1. Return ONLY valid JSON matching this exact schema
+2. Use SHORT, SCANNABLE strings (no essays)
+3. Be SPECIFIC and EVIDENCE-BASED (no speculation)
+4. NO fluff phrases like "it's important to note" or "essentially"
+5. Keep arrays to specified max lengths
+6. All strings must be concise and frontend-ready
+
+Return JSON with these exact keys:
+
+{{
+  "summary": "2-3 sentence explanation of what this project does",
+  "purpose": "What problem does this solve (max 150 chars)",
+  "tech_stack": [
+    {{
+      "name": "TechName",
+      "category": "Language|Framework|Database|Tool|Library",
+      "version": "1.0.0 or null"
+    }}
+  ],
+  "primary_language": "{primary_lang}",
+  "architecture_pattern": "MVC|Microservices|Monolith|Library|CLI|etc",
+  "components": [
+    {{
+      "name": "ComponentName",
+      "purpose": "What it does (max 200 chars)",
+      "files": ["file1.py", "file2.py"]
+    }}
+  ],
+  "data_flow": "How data moves through system (max 300 chars)",
+  "key_files": [
+    {{
+      "path": "path/to/file",
+      "role": "entry_point|config|core|utility",
+      "purpose": "One-line explanation (max 150 chars)"
+    }}
+  ],
+  "setup_steps": [
+    "Step 1: Clone repo",
+    "Step 2: Install dependencies",
+    "Step 3-6: ..."
+  ],
+  "contribution_areas": [
+    "Documentation",
+    "Tests",
+    "etc"
+  ],
+  "risky_areas": [
+    "Authentication module",
+    "Database migrations"
+  ],
+  "known_issues": [
+    "Issue pattern 1 from GitHub",
+    "Issue pattern 2"
+  ],
+  "confidence_score": 0.9
+}}
+
+Analyze based on README and file structure. Use evidence only. Be concise. Return valid JSON only.
 """
-        return await self.generate_content(prompt)
+        return prompt
     
-    async def analyze_tech_stack(self, context: Dict) -> List[Dict]:
-        """Analyze and extract technology stack."""
-        prompt = f"""
-Analyze this repository's TECH STACK.
+    def _fallback_analysis(self, context: Dict) -> RepositoryAnalysis:
+        """Deterministic fallback when Gemini unavailable."""
+        primary_lang = context.get('primary_language', 'Unknown')
+        repo_name = context.get('repo_name', 'Unknown')
+        
+        return RepositoryAnalysis(
+            summary=f"{repo_name} is a {primary_lang} project. Analysis limited due to API constraints.",
+            purpose="Project analysis unavailable",
+            tech_stack=[
+                TechStackItem(
+                    name=primary_lang,
+                    category="Programming Language",
+                    version=None
+                )
+            ],
+            primary_language=primary_lang,
+            architecture_pattern="Unknown",
+            components=[],
+            data_flow="Analysis unavailable",
+            key_files=[],
+            setup_steps=[
+                "Clone repository",
+                "Review README for setup instructions"
+            ],
+            contribution_areas=["Documentation"],
+            risky_areas=[],
+            known_issues=[],
+            confidence_score=0.3
+        )
+    
+    async def answer_question(self, question: str, analysis: RepositoryAnalysis, additional_context: str = "") -> str:
+        """
+        Answer question using pre-analyzed data.
+        This is a SEPARATE call (for Q&A), not part of initial analysis.
+        """
+        # Build concise context from analysis
+        context_str = f"""Repository Analysis:
+Summary: {analysis.summary}
+Purpose: {analysis.purpose}
+Tech Stack: {', '.join([t.name for t in analysis.tech_stack])}
+Architecture: {analysis.architecture_pattern}
+Components: {', '.join([c.name for c in analysis.components])}
 
-Repository: {context.get('repo_name')}
-Primary Language: {context.get('primary_language')}
-
-Configuration Files Found:
-{self._format_file_list(context.get('config_files', []))}
-
-Source Files:
-{self._format_file_list(context.get('source_files', [])[:15])}
-
-File Contents Summary:
-{context.get('file_contents', 'Limited content available')[:1500]}
-
-Return a JSON array of technology stack items. Each item should have:
-- name: Technology name
-- category: Category (e.g., "Framework", "Database", "Language", "Library", "Tool")
-- reasoning: Brief explanation of why this technology is identified
-
-Return ONLY valid JSON array, no additional text.
+{additional_context}
 """
-        response = await self.generate_content(prompt)
         
-        try:
-            # Try to parse JSON response
-            tech_stack = json.loads(response)
-            if isinstance(tech_stack, list):
-                return tech_stack
-        except json.JSONDecodeError:
-            pass
-        
-        # Fallback: return minimal tech stack
-        return [
-            {
-                "name": context.get('primary_language', 'Unknown'),
-                "category": "Programming Language",
-                "reasoning": "Primary language of the repository"
-            }
-        ]
-    
-    async def analyze_architecture(self, context: Dict) -> Dict:
-        """Analyze system architecture."""
-        prompt = f"""
-Analyze the ARCHITECTURE of this repository.
-
-Repository: {context.get('repo_name')}
-
-Project Structure:
-{self._format_file_list(context.get('all_files', [])[:30])}
-
-Key Source Files:
-{self._format_file_list(context.get('source_files', [])[:20])}
-
-Provide a JSON object with:
-- overview: High-level architecture description (2-3 sentences)
-- components: Array of main components, each with "name" and "description"
-- data_flow: Description of how data flows through the system
-
-Return ONLY valid JSON, no additional text.
-"""
-        response = await self.generate_content(prompt)
-        
-        try:
-            arch_data = json.loads(response)
-            if isinstance(arch_data, dict):
-                return arch_data
-        except json.JSONDecodeError:
-            pass
-        
-        # Fallback
-        return {
-            "overview": "Modular architecture with separated concerns.",
-            "components": [{"name": "Core", "description": "Main application logic"}],
-            "data_flow": "Standard data flow patterns."
-        }
-    
-    async def analyze_issues(self, context: Dict) -> Dict:
-        """Analyze GitHub issues for insights."""
-        prompt = f"""
-Analyze these GitHub ISSUES to identify patterns and insights.
-
-Repository: {context.get('repo_name')}
-
-Open Issues ({len(context.get('open_issues', []))}):
-{self._format_issues(context.get('open_issues', [])[:15])}
-
-Recently Closed Issues ({len(context.get('closed_issues', []))}):
-{self._format_issues(context.get('closed_issues', [])[:10])}
-
-Provide a JSON object with:
-- recurring_problems: Common problems or bug patterns
-- risky_areas: Areas of code that seem problematic
-- active_features: Features being actively developed
-
-Return ONLY valid JSON, no additional text.
-"""
-        response = await self.generate_content(prompt)
-        
-        try:
-            issues_data = json.loads(response)
-            if isinstance(issues_data, dict):
-                return issues_data
-        except json.JSONDecodeError:
-            pass
-        
-        # Fallback
-        return {
-            "recurring_problems": "No significant patterns identified.",
-            "risky_areas": "Review areas with frequent changes.",
-            "active_features": "Check open issues for active development."
-        }
-    
-    async def generate_contributor_guide(self, context: Dict) -> Dict:
-        """Generate contributor guide."""
-        prompt = f"""
-Create a CONTRIBUTOR GUIDE for new developers joining this project.
-
-Repository: {context.get('repo_name')}
-Tech Stack: {', '.join([t.get('name', '') for t in context.get('tech_stack', [])])}
-
-Architecture Overview:
-{context.get('architecture_overview', 'Not available')}
-
-Issues Insights:
-Recurring Problems: {context.get('recurring_problems', 'None identified')}
-Risky Areas: {context.get('risky_areas', 'None identified')}
-
-Provide a JSON object with:
-- getting_started: Step-by-step guide for new contributors
-- safe_areas: Parts of codebase safe for beginners
-- caution_areas: Parts requiring careful attention
-- feature_extension_guide: How to add new features
-
-Return ONLY valid JSON, no additional text.
-"""
-        response = await self.generate_content(prompt)
-        
-        try:
-            guide_data = json.loads(response)
-            if isinstance(guide_data, dict):
-                return guide_data
-        except json.JSONDecodeError:
-            pass
-        
-        # Fallback
-        return {
-            "getting_started": "Clone repository, install dependencies, run tests.",
-            "safe_areas": "Documentation and test files.",
-            "caution_areas": "Core business logic.",
-            "feature_extension_guide": "Follow existing patterns."
-        }
-    
-    async def answer_question(self, question: str, context: Dict) -> str:
-        """Answer a question about the repository."""
-        prompt = f"""
-ANSWER THE QUESTION about this repository using the provided context.
-
-Repository: {context.get('repo_name')}
+        prompt = f"""Answer this question about the repository. Be CONCISE (max 100 words).
 
 Question: {question}
 
-Context Available:
-- Project Overview: {context.get('overview', 'Not available')[:500]}
-- Architecture: {context.get('architecture', 'Not available')[:500]}
-- Tech Stack: {', '.join([t.get('name', '') for t in context.get('tech_stack', [])])}
-- Files: {len(context.get('files', []))} files analyzed
+Context:
+{context_str}
 
-Additional Context:
-{context.get('additional_info', '')}
+Rules:
+- Answer in 2-4 sentences maximum
+- Be specific and direct
+- No fluff or filler
+- If unsure, say so briefly
 
-Provide a clear, accurate, and helpful answer based on the repository context.
-If the answer isn't clear from the context, say so and provide the best inference you can make.
-"""
-        return await self.generate_content(prompt)
-    
-    def _format_file_list(self, files: List) -> str:
-        """Format file list for prompt."""
-        if not files:
-            return "No files"
+Answer:"""
         
-        formatted = []
-        for f in files[:20]:  # Limit to prevent prompt overflow
-            if isinstance(f, dict):
-                formatted.append(f"- {f.get('path', f.get('file_path', 'unknown'))}")
-            else:
-                formatted.append(f"- {f}")
-        return "\n".join(formatted)
-    
-    def _format_issues(self, issues: List[Dict]) -> str:
-        """Format issues for prompt."""
-        if not issues:
-            return "No issues"
-        
-        formatted = []
-        for issue in issues[:10]:
-            title = issue.get('title', 'No title')
-            labels = ', '.join([l.get('name', '') for l in issue.get('labels', [])])
-            formatted.append(f"- {title} [{labels}]")
-        
-        return "\n".join(formatted)
+        if self.client and self.model_name:
+            try:
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt
+                )
+                return response.text.strip()
+            except Exception as e:
+                return f"Unable to answer due to API limitation. Based on analysis: {analysis.summary}"
+        else:
+            return f"Based on analysis: {analysis.summary[:150]}"

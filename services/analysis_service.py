@@ -1,54 +1,53 @@
 """
-Analysis service that orchestrates repository analysis workflow.
-Coordinates GitHub fetching, file filtering, LLM analysis, and database storage.
+Production Analysis Service - Hardened with proper async flow and persistence.
+Guarantees:
+- Exactly ONE Gemini call per repository
+- Proper SQLite transaction management
+- Status-based async flow
+- Data persists across restarts
 """
 import uuid
 import json
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.schemas import (
-    Repository, AnalysisSession, RepoFile, TechStack,
-    ArchitectureSummary, IssuesInsights, ContributorGuide, QALog
+    Repository, AnalysisSession, AnalysisSummary,
+    TechStack, ArchitectureComponent, KeyFile,
+    SetupStep, ContributionArea, RiskyArea, KnownIssue,
+    QALog, RawAnalysisResponse
 )
 from services.github_service import GitHubService
-from services.gemini_service import GeminiService
+from services.gemini_service import GeminiServiceV2, RepositoryAnalysis
 from utils.file_filter import FileFilter
 
 
-class AnalysisService:
-    """Service for analyzing GitHub repositories."""
+class AnalysisServiceFinal:
+    """
+    Production-ready analysis service with proper persistence.
+    """
     
     def __init__(self):
         self.github = GitHubService()
-        self.gemini = GeminiService()
+        self.gemini = GeminiServiceV2()
         self.file_filter = FileFilter()
     
-    async def analyze_repository(self, repo_url: str, db: AsyncSession, repo_id: str = None) -> str:
+    async def start_analysis(self, repo_url: str, db: AsyncSession) -> Dict:
         """
-        Main analysis workflow.
-        Returns repo_id for the analyzed repository.
+        Start repository analysis (synchronous setup + background work).
+        
+        Returns immediately with repo_id and status='processing'.
+        Actual analysis happens in background.
         """
-        # Parse and validate URL
+        # Parse URL
         try:
             owner, repo_name = self.github.parse_repo_url(repo_url)
         except ValueError as e:
             raise ValueError(f"Invalid repository URL: {str(e)}")
         
-        def ensure_string(value):
-            """Convert any value to string, handling lists/dicts by JSON encoding."""
-            if value is None:
-                return ''
-            elif isinstance(value, (list, dict)):
-                return json.dumps(value)
-            elif isinstance(value, str):
-                return value
-            else:
-                return str(value)
-        
-        # Check if repository already exists or use provided repo_id
+        # Check if repository exists
         result = await db.execute(
             select(Repository).where(Repository.repo_url == repo_url)
         )
@@ -56,260 +55,512 @@ class AnalysisService:
         
         if existing_repo:
             repo_id = existing_repo.id
-        elif repo_id is None:
+        else:
             repo_id = str(uuid.uuid4())
-        
-        # Initialize session variable
-        session = None
-
-        try:
-            # Fetch repository metadata FIRST
-            metadata = await self.github.get_repo_metadata(owner, repo_name)
-            
-            # Create or update repository record BEFORE creating session
-            if not existing_repo:
-                repository = Repository(
-                    id=repo_id,
-                    repo_url=repo_url,
-                    owner=owner,
-                    name=repo_name,
-                    primary_language=metadata.get('language'),
-                    created_at=datetime.fromisoformat(metadata['created_at'].replace('Z', '+00:00')) if metadata.get('created_at') else None,
-                    analyzed_at=datetime.utcnow()
-                )
-                db.add(repository)
-                await db.commit()  # Commit repository first
-            else:
-                existing_repo.analyzed_at = datetime.utcnow()
-                existing_repo.primary_language = metadata.get('language')
-                await db.commit()
-            
-            # NOW create analysis session (after repository exists)
-            session_id = str(uuid.uuid4())
-            session = AnalysisSession(
-                id=session_id,
-                repo_id=repo_id,
-                status="in_progress",
-                started_at=datetime.utcnow()
+    
+        # Create minimal repository record
+            repository = Repository(
+                id=repo_id,
+                repo_url=repo_url,
+                owner=owner,
+                name=repo_name,
+                analyzed_at=datetime.utcnow()
             )
-            db.add(session)
+            db.add(repository)
+    
+            # CRITICAL: Commit repository FIRST
+            try:
+                await db.commit()
+                print(f"✓ Created repository {repo_id}")
+            except Exception as e:
+                await db.rollback()
+                print(f"✗ Failed to create repository: {str(e)}")
+                raise
+
+        # NOW create analysis session (repo exists in DB)
+        session_id = str(uuid.uuid4())
+        session = AnalysisSession(
+            id=session_id,
+            repo_id=repo_id,
+            status="processing",
+            started_at=datetime.utcnow(),
+            gemini_call_count=0
+        )
+        db.add(session)
+
+        # Commit session
+        try:
             await db.commit()
+            print(f"✓ Created analysis session {session_id} for {repo_url}")
+        except Exception as e:
+            await db.rollback()
+            print(f"✗ Failed to create analysis session: {str(e)}")
+            raise
+            print(f"✓ Created analysis session {session_id} for {repo_url}")
+        except Exception as e:
+            await db.rollback()
+            print(f"✗ Failed to create analysis session: {str(e)}")
+            raise
+        
+        return {
+            "repo_id": repo_id,
+            "session_id": session_id,
+            "status": "processing"
+        }
+    
+    async def execute_analysis(self, repo_id: str, db: AsyncSession) -> None:
+        """
+        Execute the actual analysis (called in background).
+        Uses a SEPARATE database session from the request.
+        
+        This is the ONLY method that calls Gemini.
+        """
+        print(f"\n{'='*70}")
+        print(f"BACKGROUND ANALYSIS START: {repo_id}")
+        print(f"{'='*70}")
+        
+        # Get repository info
+        result = await db.execute(
+            select(Repository).where(Repository.id == repo_id)
+        )
+        repo = result.scalar_one_or_none()
+        
+        if not repo:
+            print(f"✗ Repository not found: {repo_id}")
+            return
+        
+        # Get analysis session
+        result = await db.execute(
+            select(AnalysisSession)
+            .where(AnalysisSession.repo_id == repo_id)
+            .order_by(AnalysisSession.started_at.desc())
+        )
+        session = result.scalars().first()
+        
+        if not session:
+            print(f"✗ Analysis session not found for: {repo_id}")
+            return
+        
+        try:
+            # ================================================================
+            # STEP 1: Fetch GitHub data (no LLM calls)
+            # ================================================================
             
-            # Fetch README
+            owner = repo.owner
+            repo_name = repo.name
+            
+            print(f"📥 Fetching GitHub data for {owner}/{repo_name}...")
+            
+            metadata = await self.github.get_repo_metadata(owner, repo_name)
             readme = await self.github.get_readme(owner, repo_name)
-            
-            # Fetch repository tree
             tree = await self.github.get_repository_tree(owner, repo_name)
-            
-            # Filter important files
             important_files = self.file_filter.filter_important_files(tree, max_files=30)
             
-            # Fetch content of important files (limited to prevent overload)
+            # Fetch limited file contents
             file_contents = {}
-            for file_info in important_files[:10]:  # Limit to 10 files
+            for file_info in important_files[:10]:
                 content = await self.github.get_file_content(owner, repo_name, file_info['path'])
-                if content and len(content) < 10000:  # Skip very large files
-                    file_contents[file_info['path']] = content[:2000]  # Truncate for context
+                if content and len(content) < 10000:
+                    file_contents[file_info['path']] = content[:2000]
             
             # Fetch issues
             open_issues = await self.github.get_issues(owner, repo_name, state="open", max_issues=30)
             closed_issues = await self.github.get_issues(owner, repo_name, state="closed", max_issues=20)
             
-            # Build context for LLM
+            print(f"✓ GitHub data fetched: {len(important_files)} files, {len(open_issues)} open issues")
+            
+            # Update repository metadata
+            repo.primary_language = metadata.get('language')
+            if metadata.get('created_at'):
+                repo.created_at = datetime.fromisoformat(metadata['created_at'].replace('Z', '+00:00'))
+            repo.analyzed_at = datetime.utcnow()
+            
+            # ================================================================
+            # STEP 2: Build context for Gemini
+            # ================================================================
+            
             context = {
                 'repo_name': f"{owner}/{repo_name}",
                 'primary_language': metadata.get('language'),
                 'readme': readme,
                 'files': important_files,
-                'all_files': important_files,
                 'config_files': [f for f in important_files if f['role'] == 'configuration'],
                 'source_files': [f for f in important_files if f['role'] in ['source_code', 'entry_point']],
-                'file_contents': json.dumps(file_contents, indent=2),
+                'file_contents': file_contents,
                 'open_issues': open_issues,
                 'closed_issues': closed_issues
             }
             
-            # Generate analysis using Gemini
+            # ================================================================
+            # STEP 3: SINGLE GEMINI API CALL
+            # ================================================================
             
-            # 1. Project Overview
-            overview = await self.gemini.analyze_project_overview(context)
+            print(f"🤖 Making SINGLE Gemini API call for {owner}/{repo_name}...")
+            session.gemini_call_count += 1
             
-            # 2. Tech Stack
-            tech_stack_data = await self.gemini.analyze_tech_stack(context)
+            analysis: RepositoryAnalysis = await self.gemini.analyze_repository(context)
             
-            # Store tech stack
-            for tech_item in tech_stack_data:
-                tech_id = str(uuid.uuid4())
-                tech = TechStack(
-                    id=tech_id,
+            print(f"✓ Received structured analysis (confidence: {analysis.confidence_score})")
+            
+            # ================================================================
+            # STEP 4: Store in database (split tables)
+            # ================================================================
+            
+            print(f"💾 Storing analysis in database...")
+            
+            # 1. Summary
+            result = await db.execute(
+                select(AnalysisSummary).where(AnalysisSummary.repo_id == repo_id)
+            )
+            existing_summary = result.scalar_one_or_none()
+            
+            if existing_summary:
+                # Update existing
+                existing_summary.summary = analysis.summary
+                existing_summary.purpose = analysis.purpose
+                existing_summary.architecture_pattern = analysis.architecture_pattern
+                existing_summary.data_flow = analysis.data_flow
+                existing_summary.confidence_score = analysis.confidence_score
+                existing_summary.updated_at = datetime.utcnow()
+            else:
+                # Create new
+                summary = AnalysisSummary(
                     repo_id=repo_id,
-                    name=tech_item.get('name', 'Unknown'),
-                    category=tech_item.get('category', 'Other'),
-                    reasoning=tech_item.get('reasoning', '')
+                    summary=analysis.summary,
+                    purpose=analysis.purpose,
+                    architecture_pattern=analysis.architecture_pattern,
+                    data_flow=analysis.data_flow,
+                    confidence_score=analysis.confidence_score
+                )
+                db.add(summary)
+            
+            # 2. Tech Stack (delete old, insert new)
+            await db.execute(
+                select(TechStack).where(TechStack.repo_id == repo_id)
+            )
+            # Delete existing
+            result = await db.execute(
+                select(TechStack).where(TechStack.repo_id == repo_id)
+            )
+            for old_tech in result.scalars():
+                await db.delete(old_tech)
+            
+            # Insert new
+            for tech_item in analysis.tech_stack:
+                tech = TechStack(
+                    id=str(uuid.uuid4()),
+                    repo_id=repo_id,
+                    name=tech_item.name,
+                    category=tech_item.category,
+                    version=tech_item.version
                 )
                 db.add(tech)
             
-            # 3. Architecture Analysis
-            arch_data = await self.gemini.analyze_architecture(context)
-            
-            arch_summary = ArchitectureSummary(
-                repo_id=repo_id,
-                overview=ensure_string(arch_data.get('overview')),
-                components=ensure_string(arch_data.get('components')),
-                data_flow=ensure_string(arch_data.get('data_flow'))
-            )
-            
-            # Check if architecture summary exists
+            # 3. Components
             result = await db.execute(
-                select(ArchitectureSummary).where(ArchitectureSummary.repo_id == repo_id)
+                select(ArchitectureComponent).where(ArchitectureComponent.repo_id == repo_id)
             )
-            existing_arch = result.scalar_one_or_none()
+            for old_comp in result.scalars():
+                await db.delete(old_comp)
             
-            if existing_arch:
-                existing_arch.overview = arch_summary.overview
-                existing_arch.components = arch_summary.components
-                existing_arch.data_flow = arch_summary.data_flow
-            else:
-                db.add(arch_summary)
-            
-            # 4. Issues Analysis
-            issues_data = await self.gemini.analyze_issues(context)
-
-            issues_insights = IssuesInsights(
-                repo_id=repo_id,
-                recurring_problems=ensure_string(issues_data.get('recurring_problems', '')),
-                risky_areas=ensure_string(issues_data.get('risky_areas', '')),
-                active_features=ensure_string(issues_data.get('active_features', ''))
-            )
-            
-            result = await db.execute(
-                select(IssuesInsights).where(IssuesInsights.repo_id == repo_id)
-            )
-            existing_issues = result.scalar_one_or_none()
-            
-            if existing_issues:
-                existing_issues.recurring_problems = issues_insights.recurring_problems
-                existing_issues.risky_areas = issues_insights.risky_areas
-                existing_issues.active_features = issues_insights.active_features
-            else:
-                db.add(issues_insights)
-            
-            # 5. Contributor Guide
-            guide_context = {
-                **context,
-                'tech_stack': tech_stack_data,
-                'architecture_overview': arch_data.get('overview', ''),
-                'recurring_problems': issues_data.get('recurring_problems', ''),
-                'risky_areas': issues_data.get('risky_areas', '')
-            }
-            
-            guide_data = await self.gemini.generate_contributor_guide(guide_context)
-            
-            contributor_guide = ContributorGuide(
-                repo_id=repo_id,
-                getting_started=ensure_string(guide_data.get('getting_started')),
-                safe_areas=ensure_string(guide_data.get('safe_areas')),
-                caution_areas=ensure_string(guide_data.get('caution_areas')),
-                feature_extension_guide=ensure_string(guide_data.get('feature_extension_guide'))
-            )
-            
-            result = await db.execute(
-                select(ContributorGuide).where(ContributorGuide.repo_id == repo_id)
-            )
-            existing_guide = result.scalar_one_or_none()
-            
-            if existing_guide:
-                existing_guide.getting_started = contributor_guide.getting_started
-                existing_guide.safe_areas = contributor_guide.safe_areas
-                existing_guide.caution_areas = contributor_guide.caution_areas
-                existing_guide.feature_extension_guide = contributor_guide.feature_extension_guide
-            else:
-                db.add(contributor_guide)
-            
-            # 6. Store file information
-            for file_info in important_files[:30]:
-                file_id = str(uuid.uuid4())
-                repo_file = RepoFile(
-                    id=file_id,
+            for comp in analysis.components:
+                component = ArchitectureComponent(
+                    id=str(uuid.uuid4()),
                     repo_id=repo_id,
-                    file_path=file_info['path'],
-                    language=file_info.get('language', 'Unknown'),
-                    role=file_info.get('role', 'other'),
-                    summary=f"Priority: {file_info.get('priority', 0)}"
+                    name=comp.name,
+                    purpose=comp.purpose,
+                    key_files=json.dumps(comp.files)
                 )
-                db.add(repo_file)
+                db.add(component)
             
-            # Mark session as completed
+            # 4. Key Files
+            result = await db.execute(
+                select(KeyFile).where(KeyFile.repo_id == repo_id)
+            )
+            for old_file in result.scalars():
+                await db.delete(old_file)
+            
+            for file_item in analysis.key_files:
+                key_file = KeyFile(
+                    id=str(uuid.uuid4()),
+                    repo_id=repo_id,
+                    file_path=file_item.path,
+                    role=file_item.role,
+                    purpose=file_item.purpose
+                )
+                db.add(key_file)
+            
+            # 5. Setup Steps
+            result = await db.execute(
+                select(SetupStep).where(SetupStep.repo_id == repo_id)
+            )
+            for old_step in result.scalars():
+                await db.delete(old_step)
+            
+            for i, step in enumerate(analysis.setup_steps):
+                setup_step = SetupStep(
+                    id=str(uuid.uuid4()),
+                    repo_id=repo_id,
+                    step_order=i + 1,
+                    instruction=step
+                )
+                db.add(setup_step)
+            
+            # 6. Contribution Areas
+            result = await db.execute(
+                select(ContributionArea).where(ContributionArea.repo_id == repo_id)
+            )
+            for old_area in result.scalars():
+                await db.delete(old_area)
+            
+            for area in analysis.contribution_areas:
+                contrib_area = ContributionArea(
+                    id=str(uuid.uuid4()),
+                    repo_id=repo_id,
+                    area=area
+                )
+                db.add(contrib_area)
+            
+            # 7. Risky Areas
+            result = await db.execute(
+                select(RiskyArea).where(RiskyArea.repo_id == repo_id)
+            )
+            for old_risky in result.scalars():
+                await db.delete(old_risky)
+            
+            for risky in analysis.risky_areas:
+                risky_area = RiskyArea(
+                    id=str(uuid.uuid4()),
+                    repo_id=repo_id,
+                    area=risky
+                )
+                db.add(risky_area)
+            
+            # 8. Known Issues
+            result = await db.execute(
+                select(KnownIssue).where(KnownIssue.repo_id == repo_id)
+            )
+            for old_issue in result.scalars():
+                await db.delete(old_issue)
+            
+            for issue in analysis.known_issues:
+                known_issue = KnownIssue(
+                    id=str(uuid.uuid4()),
+                    repo_id=repo_id,
+                    issue=issue
+                )
+                db.add(known_issue)
+            
+            # 9. Raw Response (for debugging)
+            result = await db.execute(
+                select(RawAnalysisResponse).where(RawAnalysisResponse.repo_id == repo_id)
+            )
+            existing_raw = result.scalar_one_or_none()
+            
+            if existing_raw:
+                existing_raw.raw_json = analysis.json()
+                existing_raw.model_version = self.gemini.model_name or "mock"
+                existing_raw.created_at = datetime.utcnow()
+            else:
+                raw_response = RawAnalysisResponse(
+                    repo_id=repo_id,
+                    raw_json=analysis.json(),
+                    model_version=self.gemini.model_name or "mock"
+                )
+                db.add(raw_response)
+            
+            # ================================================================
+            # STEP 5: Mark session as completed
+            # ================================================================
+            
             session.status = "completed"
             session.completed_at = datetime.utcnow()
             
-            await db.commit()
+            # CRITICAL: Commit everything
+            try:
+                await db.commit()
+                print(f"✓ Analysis committed to database successfully")
+                print(f"✓ Gemini calls made: {session.gemini_call_count}")
+            except Exception as commit_error:
+                await db.rollback()
+                print(f"✗ Database commit failed: {str(commit_error)}")
+                raise
             
-            return repo_id
+            print(f"{'='*70}")
+            print(f"BACKGROUND ANALYSIS COMPLETE: {owner}/{repo_name}")
+            print(f"{'='*70}\n")
             
         except Exception as e:
-            # Mark session as failed (if session was created)
-            if session is not None:
-                session.status = "failed"
+            # Mark session as failed
+            session.status = "failed"
+            session.error_message = str(e)
             session.completed_at = datetime.utcnow()
-            await db.commit()
-            raise ValueError(f"Analysis failed: {str(e)}")
+            
+            try:
+                await db.commit()
+                print(f"✗ Analysis failed and marked in database: {str(e)}")
+            except:
+                await db.rollback()
+                print(f"✗ Failed to mark error in database")
+            
+            print(f"✗ Background analysis error: {str(e)}")
+            import traceback
+            traceback.print_exc()
     
-    async def answer_question(self, repo_id: str, question: str, db: AsyncSession) -> Dict:
-        """Answer a question about the repository."""
-        # Fetch repository data
+    async def get_status(self, repo_id: str, db: AsyncSession) -> Dict:
+        """Get analysis status for a repository."""
         result = await db.execute(
-            select(Repository).where(Repository.id == repo_id)
+            select(AnalysisSession)
+            .where(AnalysisSession.repo_id == repo_id)
+            .order_by(AnalysisSession.started_at.desc())
         )
-        repository = result.scalar_one_or_none()
+        session = result.scalars().first()
         
-        if not repository:
-            raise ValueError(f"Repository not found: {repo_id}")
+        if not session:
+            return {"repo_id": repo_id, "status": "not_found"}
         
-        # Fetch architecture summary
-        result = await db.execute(
-            select(ArchitectureSummary).where(ArchitectureSummary.repo_id == repo_id)
+        return {
+            "repo_id": repo_id,
+            "status": session.status,
+            "started_at": session.started_at.isoformat() if session.started_at else None,
+            "completed_at": session.completed_at.isoformat() if session.completed_at else None,
+            "error_message": session.error_message
+        }
+    
+    async def get_analysis(self, repo_id: str, db: AsyncSession) -> Dict:
+        """
+        Retrieve complete analysis from database.
+        ZERO Gemini calls - reads only from stored data.
+        """
+        # Check status first
+        status_result = await self.get_status(repo_id, db)
+        
+        if status_result['status'] != 'completed':
+            raise ValueError(f"Analysis not completed (status: {status_result['status']})")
+        
+        # Fetch all data from split tables
+        summary_result = await db.execute(
+            select(AnalysisSummary).where(AnalysisSummary.repo_id == repo_id)
         )
-        arch = result.scalar_one_or_none()
+        summary = summary_result.scalar_one_or_none()
         
-        # Fetch tech stack
-        result = await db.execute(
+        if not summary:
+            raise ValueError("Analysis data not found")
+        
+        # Tech stack
+        tech_result = await db.execute(
             select(TechStack).where(TechStack.repo_id == repo_id)
         )
-        tech_stack = result.scalars().all()
+        tech_stack = [
+            {"name": t.name, "category": t.category, "version": t.version}
+            for t in tech_result.scalars()
+        ]
         
-        # Fetch contributor guide
-        result = await db.execute(
-            select(ContributorGuide).where(ContributorGuide.repo_id == repo_id)
+        # Components
+        comp_result = await db.execute(
+            select(ArchitectureComponent).where(ArchitectureComponent.repo_id == repo_id)
         )
-        guide = result.scalar_one_or_none()
+        components = [
+            {"name": c.name, "purpose": c.purpose, "files": json.loads(c.key_files) if c.key_files else []}
+            for c in comp_result.scalars()
+        ]
         
-        # Fetch files
-        result = await db.execute(
-            select(RepoFile).where(RepoFile.repo_id == repo_id)
+        # Key files
+        files_result = await db.execute(
+            select(KeyFile).where(KeyFile.repo_id == repo_id)
         )
-        files = result.scalars().all()
+        key_files = [
+            {"path": f.file_path, "role": f.role, "purpose": f.purpose}
+            for f in files_result.scalars()
+        ]
         
-        # Build context
-        context = {
-            'repo_name': f"{repository.owner}/{repository.name}",
-            'overview': arch.overview if arch else '',
-            'architecture': arch.data_flow if arch else '',
-            'tech_stack': [{'name': t.name, 'category': t.category} for t in tech_stack],
-            'files': [{'file_path': f.file_path, 'role': f.role} for f in files],
-            'additional_info': ''
+        # Setup steps
+        steps_result = await db.execute(
+            select(SetupStep)
+            .where(SetupStep.repo_id == repo_id)
+            .order_by(SetupStep.step_order)
+        )
+        setup_steps = [s.instruction for s in steps_result.scalars()]
+        
+        # Contribution areas
+        contrib_result = await db.execute(
+            select(ContributionArea).where(ContributionArea.repo_id == repo_id)
+        )
+        contribution_areas = [c.area for c in contrib_result.scalars()]
+        
+        # Risky areas
+        risky_result = await db.execute(
+            select(RiskyArea).where(RiskyArea.repo_id == repo_id)
+        )
+        risky_areas = [r.area for r in risky_result.scalars()]
+        
+        # Known issues
+        issues_result = await db.execute(
+            select(KnownIssue).where(KnownIssue.repo_id == repo_id)
+        )
+        known_issues = [i.issue for i in issues_result.scalars()]
+        
+        return {
+            "repo_id": repo_id,
+            "summary": summary.summary,
+            "purpose": summary.purpose,
+            "architecture_pattern": summary.architecture_pattern,
+            "data_flow": summary.data_flow,
+            "confidence_score": summary.confidence_score,
+            "tech_stack": tech_stack,
+            "components": components,
+            "key_files": key_files,
+            "setup_steps": setup_steps,
+            "contribution_areas": contribution_areas,
+            "risky_areas": risky_areas,
+            "known_issues": known_issues,
+            "analyzed_at": summary.created_at.isoformat() if summary.created_at else None,
+            "version": summary.analysis_version
         }
+    
+    async def answer_question(self, repo_id: str, question: str, db: AsyncSession) -> Dict:
+        """
+        Answer question using ONLY stored data.
+        ZERO Gemini calls - deterministic, read-only operation.
+        """
+        # Get stored analysis
+        analysis_data = await self.get_analysis(repo_id, db)
         
-        # Check if question is about a specific file
+        # Build simple context-based answer from stored data
+        # This is deterministic and requires NO Gemini call
+        
         question_lower = question.lower()
-        for file in files:
-            if file.file_path.lower() in question_lower:
-                context['additional_info'] += f"\nFile: {file.file_path}\nRole: {file.role}\nLanguage: {file.language}\n"
         
-        # Generate answer
-        answer = await self.gemini.answer_question(question, context)
+        # Simple keyword matching for common questions
+        if any(word in question_lower for word in ['what is', 'what does', 'about', 'purpose']):
+            answer = f"{analysis_data['summary']} {analysis_data['purpose']}"
         
-        # Store Q&A log
+        elif any(word in question_lower for word in ['tech', 'technology', 'stack', 'built', 'language']):
+            tech_list = ', '.join([t['name'] for t in analysis_data['tech_stack'][:5]])
+            answer = f"This project uses: {tech_list}. Primary language: {analysis_data['tech_stack'][0]['name'] if analysis_data['tech_stack'] else 'Unknown'}."
+        
+        elif any(word in question_lower for word in ['architecture', 'structure', 'organized']):
+            answer = f"Architecture: {analysis_data['architecture_pattern']}. {analysis_data['data_flow']}"
+        
+        elif any(word in question_lower for word in ['contribute', 'help', 'start']):
+            if analysis_data['setup_steps']:
+                steps = ' → '.join(analysis_data['setup_steps'][:3])
+                answer = f"To contribute: {steps}"
+            else:
+                answer = "Setup instructions not available in analysis."
+        
+        elif any(word in question_lower for word in ['issue', 'problem', 'bug']):
+            if analysis_data['known_issues']:
+                issues = ', '.join(analysis_data['known_issues'][:3])
+                answer = f"Known issues: {issues}"
+            else:
+                answer = "No specific issues identified in analysis."
+        
+        else:
+            # Default: return summary
+            answer = analysis_data['summary']
+        
+        # Log Q&A
         qa_id = str(uuid.uuid4())
         qa_log = QALog(
             id=qa_id,
@@ -319,7 +570,12 @@ class AnalysisService:
             created_at=datetime.utcnow()
         )
         db.add(qa_log)
-        await db.commit()
+        
+        try:
+            await db.commit()
+        except Exception as e:
+            await db.rollback()
+            print(f"Warning: Failed to log Q&A: {str(e)}")
         
         return {
             'repo_id': repo_id,
