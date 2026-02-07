@@ -49,7 +49,8 @@ class GitHubService:
         """Fetch repository metadata from GitHub API."""
         url = f"{self.BASE_URL}/repos/{owner}/{repo}"
         
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        # Create client with SSL verification disabled for potential corporate proxies
+        async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
             try:
                 response = await client.get(url, headers=self.headers)
                 response.raise_for_status()
@@ -61,6 +62,10 @@ class GitHubService:
                     raise ValueError("GitHub API rate limit exceeded. Please add GITHUB_TOKEN to .env")
                 else:
                     raise ValueError(f"GitHub API error: {e.response.status_code}")
+            except httpx.ConnectError as e:
+                raise ValueError(f"Failed to connect to GitHub: Connection error. Check your internet connection.")
+            except httpx.TimeoutException as e:
+                raise ValueError(f"Failed to connect to GitHub: Request timed out. Check your internet connection.")
             except httpx.RequestError as e:
                 raise ValueError(f"Failed to connect to GitHub: {str(e)}")
     
@@ -68,7 +73,7 @@ class GitHubService:
         """Fetch README content."""
         url = f"{self.BASE_URL}/repos/{owner}/{repo}/readme"
         
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
             try:
                 response = await client.get(url, headers=self.headers)
                 response.raise_for_status()
@@ -87,7 +92,7 @@ class GitHubService:
         """Fetch content of a specific file."""
         url = f"{self.BASE_URL}/repos/{owner}/{repo}/contents/{path}"
         
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
             try:
                 response = await client.get(url, headers=self.headers)
                 response.raise_for_status()
@@ -105,7 +110,7 @@ class GitHubService:
         """List files in a directory."""
         url = f"{self.BASE_URL}/repos/{owner}/{repo}/contents/{path}"
         
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
             try:
                 response = await client.get(url, headers=self.headers)
                 response.raise_for_status()
@@ -127,7 +132,7 @@ class GitHubService:
             "direction": "desc"
         }
         
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
             try:
                 response = await client.get(url, headers=self.headers, params=params)
                 response.raise_for_status()
@@ -146,7 +151,7 @@ class GitHubService:
         for branch_name in [branch, "main", "master"]:
             url = f"{self.BASE_URL}/repos/{owner}/{repo}/git/trees/{branch_name}?recursive=1"
             
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
                 try:
                     response = await client.get(url, headers=self.headers)
                     response.raise_for_status()

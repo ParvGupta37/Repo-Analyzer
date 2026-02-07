@@ -1,295 +1,439 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GitHub Repository Analyzer</title>
+    <title>RepoLens - GitHub Repository Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-        
-        .container {
-            background: white;
-            padding: 40px;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            max-width: 600px;
-            width: 100%;
-        }
-        
-        h1 {
-            color: #333;
-            margin-bottom: 10px;
-            font-size: 32px;
-        }
-        
-        .subtitle {
-            color: #666;
-            margin-bottom: 30px;
-            font-size: 16px;
-        }
-        
-        .input-group {
-            margin-bottom: 20px;
-        }
-        
-        label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #555;
-            font-size: 14px;
-        }
-        
-        input {
-            width: 100%;
-            padding: 15px;
-            border: 2px solid #e0e0e0;
-            border-radius: 10px;
-            font-size: 16px;
-            transition: all 0.3s;
-        }
-        
-        input:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-        
-        button {
-            width: 100%;
-            padding: 16px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
-        }
-        
-        button:active {
-            transform: translateY(0);
-        }
-        
-        button:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-            transform: none;
-        }
-        
-        .loading {
-            display: none;
-            text-align: center;
-            margin-top: 20px;
-        }
-        
-        .loading.active {
-            display: block;
-        }
-        
-        .spinner {
-            display: inline-block;
-            width: 40px;
-            height: 40px;
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 10px;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        .loading-text {
-            color: #666;
-            font-size: 14px;
-        }
-        
-        .error {
-            background: #fee;
-            border: 2px solid #fcc;
-            padding: 15px;
-            border-radius: 10px;
-            margin-top: 20px;
-            color: #c33;
-        }
-        
-        .example {
-            margin-top: 10px;
-            font-size: 13px;
-            color: #999;
-        }
-        
-        .example a {
-            color: #667eea;
-            text-decoration: none;
-        }
-        
-        .example a:hover {
-            text-decoration: underline;
-        }
-        
-        .features {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-            margin-top: 30px;
-            padding-top: 30px;
-            border-top: 1px solid #eee;
-        }
-        
-        .feature {
-            text-align: center;
-        }
-        
-        .feature-icon {
-            font-size: 32px;
-            margin-bottom: 8px;
-        }
-        
-        .feature-text {
-            font-size: 13px;
-            color: #666;
+            font-family: 'Inter', sans-serif;
         }
     </style>
 </head>
-<body>
-    <div class="container">
-        <h1>🔍 GitHub Repository Analyzer</h1>
-        <p class="subtitle">Understand any GitHub repository instantly with AI-powered analysis</p>
-        
-        <div class="input-group">
-            <label for="repoUrl">GitHub Repository URL</label>
-            <input 
-                type="text" 
-                id="repoUrl" 
-                placeholder="https://github.com/username/repository"
-                value="https://github.com/DishaA06/ZBOT"
-            />
-            <div class="example">
-                Try: <a href="#" onclick="setExample('https://github.com/fastapi/fastapi'); return false;">FastAPI</a> · 
-                <a href="#" onclick="setExample('https://github.com/DishaA06/ZBOT'); return false;">ZBOT</a> · 
-                <a href="#" onclick="setExample('https://github.com/django/django'); return false;">Django</a>
-            </div>
-        </div>
-        
-        <button onclick="analyzeRepo()" id="analyzeBtn">
-            Analyze Repository
-        </button>
-        
-        <div class="loading" id="loading">
-            <div class="spinner"></div>
-            <div class="loading-text">Analyzing repository... This may take 30-60 seconds</div>
-        </div>
-        
-        <div id="error" class="error" style="display: none;"></div>
-        
-        <div class="features">
-            <div class="feature">
-                <div class="feature-icon">🎯</div>
-                <div class="feature-text">Project Overview</div>
-            </div>
-            <div class="feature">
-                <div class="feature-icon">🛠️</div>
-                <div class="feature-text">Tech Stack</div>
-            </div>
-            <div class="feature">
-                <div class="feature-icon">🏗️</div>
-                <div class="feature-text">Architecture</div>
-            </div>
-            <div class="feature">
-                <div class="feature-icon">💬</div>
-                <div class="feature-text">Ask Questions</div>
-            </div>
-        </div>
-    </div>
 
-    <script>
-        function setExample(url) {
-            document.getElementById('repoUrl').value = url;
-        }
-        
-        async function analyzeRepo() {
-            const repoUrl = document.getElementById('repoUrl').value.trim();
-            const errorDiv = document.getElementById('error');
-            const loadingDiv = document.getElementById('loading');
-            const btn = document.getElementById('analyzeBtn');
-            
-            errorDiv.style.display = 'none';
-            
-            if (!repoUrl) {
-                errorDiv.textContent = 'Please enter a GitHub repository URL';
-                errorDiv.style.display = 'block';
-                return;
-            }
-            
-            if (!repoUrl.includes('github.com')) {
-                errorDiv.textContent = 'Please enter a valid GitHub URL';
-                errorDiv.style.display = 'block';
-                return;
-            }
-            
-            btn.disabled = true;
-            btn.textContent = 'Starting Analysis...';
-            loadingDiv.classList.add('active');
-            
-            try {
-                const response = await fetch('http://localhost:8000/api/analyze-repo', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ repo_url: repoUrl })
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                    // Redirect to repository page with repo_id
-                    window.location.href = `repo.html?id=${data.repo_id}&url=${encodeURIComponent(repoUrl)}`;
-                } else {
-                    errorDiv.textContent = data.detail || 'Analysis failed. Please try again.';
-                    errorDiv.style.display = 'block';
-                    btn.disabled = false;
-                    btn.textContent = 'Analyze Repository';
-                    loadingDiv.classList.remove('active');
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+
+        // Lucide Icons as inline SVG components
+        const CodeIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="16 18 22 12 16 6"></polyline>
+                <polyline points="8 6 2 12 8 18"></polyline>
+            </svg>
+        );
+
+        const CloudIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"></path>
+            </svg>
+        );
+
+        const BarChartIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="20" x2="12" y2="10"></line>
+                <line x1="18" y1="20" x2="18" y2="4"></line>
+                <line x1="6" y1="20" x2="6" y2="16"></line>
+            </svg>
+        );
+
+        const SearchIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <path d="m21 21-4.35-4.35"></path>
+            </svg>
+        );
+
+        const BellIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path>
+                <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path>
+            </svg>
+        );
+
+        const FileIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+            </svg>
+        );
+
+        const FolderIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path>
+            </svg>
+        );
+
+        const GitBranchIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="6" y1="3" x2="6" y2="15"></line>
+                <circle cx="18" cy="6" r="3"></circle>
+                <circle cx="6" cy="18" r="3"></circle>
+                <path d="M18 9a9 9 0 0 1-9 9"></path>
+            </svg>
+        );
+
+        const UsersIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+        );
+
+        const SettingsIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+        );
+
+        const EyeIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+        );
+
+        const LoaderIcon = () => (
+            <svg className="animate-spin" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="2" x2="12" y2="6"></line>
+                <line x1="12" y1="18" x2="12" y2="22"></line>
+                <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+                <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+                <line x1="2" y1="12" x2="6" y2="12"></line>
+                <line x1="18" y1="12" x2="22" y2="12"></line>
+                <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+                <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+            </svg>
+        );
+
+        // Mock data for the dashboard
+        const mockRepoData = {
+            name: "react-dashboard",
+            owner: "johndoe",
+            language: "TypeScript",
+            complexity: "Medium",
+            totalFiles: 247,
+            lastCommit: "2 hours ago",
+            repoSize: "45.2 MB",
+            files: [
+                { name: "src/App.tsx", type: "TypeScript", size: "12.4 KB", complexity: "Low", contributor: "JD" },
+                { name: "src/components/Dashboard.tsx", type: "TypeScript", size: "8.7 KB", complexity: "Medium", contributor: "AS" },
+                { name: "src/utils/api.ts", type: "TypeScript", size: "5.2 KB", complexity: "High", contributor: "JD" },
+                { name: "package.json", type: "JSON", size: "2.1 KB", complexity: "Low", contributor: "JD" },
+                { name: "README.md", type: "Markdown", size: "4.8 KB", complexity: "Low", contributor: "AS" },
+                { name: "src/hooks/useAuth.ts", type: "TypeScript", size: "3.5 KB", complexity: "Medium", contributor: "MK" },
+                { name: "src/styles/globals.css", type: "CSS", size: "6.3 KB", complexity: "Low", contributor: "AS" },
+                { name: "tsconfig.json", type: "JSON", size: "1.2 KB", complexity: "Low", contributor: "JD" },
+            ]
+        };
+
+        function LandingPage({ onAnalyze }) {
+            const [repoUrl, setRepoUrl] = useState('');
+            const [isLoading, setIsLoading] = useState(false);
+
+            const handleAnalyze = () => {
+                if (repoUrl.trim()) {
+                    setIsLoading(true);
+                    setTimeout(() => {
+                        setIsLoading(false);
+                        onAnalyze();
+                    }, 2000);
                 }
-            } catch (error) {
-                errorDiv.textContent = 'Connection error. Make sure the server is running on http://localhost:8000';
-                errorDiv.style.display = 'block';
-                btn.disabled = false;
-                btn.textContent = 'Analyze Repository';
-                loadingDiv.classList.remove('active');
-            }
+            };
+
+            return (
+                <div className="min-h-screen bg-white flex flex-col">
+                    {/* Header Icons */}
+                    <div className="flex justify-center gap-8 pt-16 pb-8">
+                        <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
+                            <CodeIcon />
+                        </div>
+                        <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
+                            <CloudIcon />
+                        </div>
+                        <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
+                            <BarChartIcon />
+                        </div>
+                    </div>
+
+                    {/* Main Content */}
+                    <div className="flex-1 flex flex-col items-center justify-center px-4 -mt-20">
+                        <h1 className="text-6xl font-bold text-gray-900 mb-4 text-center">
+                            GitHub Repository Analyzer
+                        </h1>
+                        <p className="text-xl text-gray-600 mb-12 text-center max-w-2xl">
+                            Free, fast, and insightful. Paste a GitHub repository URL to understand the codebase instantly.
+                        </p>
+
+                        {/* Input Area */}
+                        <div className="w-full max-w-3xl">
+                            <div className="flex items-center bg-white border-2 border-gray-300 rounded-2xl overflow-hidden shadow-xl hover:shadow-2xl transition-shadow duration-300">
+                                <input
+                                    type="text"
+                                    value={repoUrl}
+                                    onChange={(e) => setRepoUrl(e.target.value)}
+                                    onKeyPress={(e) => e.key === 'Enter' && handleAnalyze()}
+                                    placeholder="https://github.com/username/repository"
+                                    className="flex-1 px-8 py-6 text-lg outline-none"
+                                    disabled={isLoading}
+                                />
+                                <button
+                                    onClick={handleAnalyze}
+                                    disabled={isLoading || !repoUrl.trim()}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-10 py-6 text-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3"
+                                >
+                                    {isLoading ? (
+                                        <>
+                                            <LoaderIcon />
+                                            <span>ANALYZING...</span>
+                                        </>
+                                    ) : (
+                                        'ANALYZE REPO'
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Footer Text */}
+                        <p className="text-sm text-gray-500 mt-8">
+                            Supports public repositories. Rate limits apply to unauthenticated requests.
+                        </p>
+                    </div>
+                </div>
+            );
         }
-        
-        // Allow Enter key to submit
-        document.getElementById('repoUrl').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') analyzeRepo();
-        });
+
+        function Dashboard({ onBack }) {
+            const [activeNav, setActiveNav] = useState('Overview');
+
+            return (
+                <div className="min-h-screen bg-gray-50 flex">
+                    {/* Sidebar */}
+                    <div className="w-64 bg-gradient-to-b from-blue-900 to-blue-800 text-white flex flex-col">
+                        {/* Brand */}
+                        <div className="p-6 border-b border-blue-700">
+                            <h2 className="text-2xl font-bold">RepoLens</h2>
+                            <p className="text-blue-300 text-sm mt-1">Repository Insights</p>
+                        </div>
+
+                        {/* Navigation */}
+                        <nav className="flex-1 p-4">
+                            {[
+                                { name: 'Overview', icon: <BarChartIcon /> },
+                                { name: 'File Browser', icon: <FolderIcon /> },
+                                { name: 'Dependencies', icon: <GitBranchIcon /> },
+                                { name: 'Contributors', icon: <UsersIcon /> },
+                                { name: 'Settings', icon: <SettingsIcon /> },
+                            ].map((item) => (
+                                <button
+                                    key={item.name}
+                                    onClick={() => setActiveNav(item.name)}
+                                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg mb-2 transition-all duration-200 ${activeNav === item.name
+                                            ? 'bg-blue-700 shadow-lg'
+                                            : 'hover:bg-blue-800'
+                                        }`}
+                                >
+                                    {item.icon}
+                                    <span className="font-medium">{item.name}</span>
+                                </button>
+                            ))}
+                        </nav>
+
+                        {/* Storage Widget */}
+                        <div className="p-4 m-4 bg-blue-800 rounded-lg border border-blue-700">
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="text-sm font-medium">Repo Size</span>
+                                <span className="text-xs text-blue-300">45.2 MB</span>
+                            </div>
+                            <div className="w-full bg-blue-900 rounded-full h-2">
+                                <div className="bg-gradient-to-r from-green-400 to-blue-400 h-2 rounded-full" style={{ width: '65%' }}></div>
+                            </div>
+                            <p className="text-xs text-blue-300 mt-2">65% of typical repo size</p>
+                        </div>
+
+                        {/* Back Button */}
+                        <button
+                            onClick={onBack}
+                            className="m-4 px-4 py-2 bg-blue-700 hover:bg-blue-600 rounded-lg transition-colors duration-200 text-sm font-medium"
+                        >
+                            ← Analyze Another Repo
+                        </button>
+                    </div>
+
+                    {/* Main Content */}
+                    <div className="flex-1 flex flex-col">
+                        {/* Top Header */}
+                        <div className="bg-white border-b border-gray-200 px-8 py-4 flex items-center justify-between">
+                            <div className="flex items-center gap-4 flex-1 max-w-xl">
+                                <SearchIcon />
+                                <input
+                                    type="text"
+                                    placeholder="Search files, functions, or code..."
+                                    className="flex-1 outline-none text-gray-700"
+                                />
+                            </div>
+                            <div className="flex items-center gap-6">
+                                <button className="text-gray-600 hover:text-gray-900 relative">
+                                    <BellIcon />
+                                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                                </button>
+                                <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-semibold">
+                                    JD
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Main Content Area */}
+                        <div className="flex-1 p-8 overflow-auto">
+                            {/* Repository Header */}
+                            <div className="mb-8">
+                                <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                                    {mockRepoData.owner}/{mockRepoData.name}
+                                </h1>
+                                <p className="text-gray-600">Analyzed repository overview and insights</p>
+                            </div>
+
+                            {/* Quick Access Cards */}
+                            <div className="mb-8">
+                                <h2 className="text-xl font-semibold text-gray-900 mb-4">Repository Insights</h2>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                    <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <span className="text-gray-600 text-sm font-medium">Language</span>
+                                            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                                                <CodeIcon />
+                                            </div>
+                                        </div>
+                                        <p className="text-2xl font-bold text-gray-900">{mockRepoData.language}</p>
+                                        <p className="text-xs text-gray-500 mt-1">Primary language</p>
+                                    </div>
+
+                                    <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <span className="text-gray-600 text-sm font-medium">Complexity</span>
+                                            <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
+                                                <BarChartIcon />
+                                            </div>
+                                        </div>
+                                        <p className="text-2xl font-bold text-gray-900">{mockRepoData.complexity}</p>
+                                        <p className="text-xs text-gray-500 mt-1">Overall rating</p>
+                                    </div>
+
+                                    <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <span className="text-gray-600 text-sm font-medium">Total Files</span>
+                                            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                                                <FileIcon />
+                                            </div>
+                                        </div>
+                                        <p className="text-2xl font-bold text-gray-900">{mockRepoData.totalFiles}</p>
+                                        <p className="text-xs text-gray-500 mt-1">Tracked files</p>
+                                    </div>
+
+                                    <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <span className="text-gray-600 text-sm font-medium">Last Commit</span>
+                                            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                                                <GitBranchIcon />
+                                            </div>
+                                        </div>
+                                        <p className="text-2xl font-bold text-gray-900">{mockRepoData.lastCommit}</p>
+                                        <p className="text-xs text-gray-500 mt-1">Latest update</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Files Table */}
+                            <div>
+                                <h2 className="text-xl font-semibold text-gray-900 mb-4">Repository Files</h2>
+                                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                                    <table className="w-full">
+                                        <thead className="bg-gray-50 border-b border-gray-200">
+                                            <tr>
+                                                <th className="text-left px-6 py-4 text-sm font-semibold text-gray-700">File Name</th>
+                                                <th className="text-left px-6 py-4 text-sm font-semibold text-gray-700">Type</th>
+                                                <th className="text-left px-6 py-4 text-sm font-semibold text-gray-700">Size</th>
+                                                <th className="text-left px-6 py-4 text-sm font-semibold text-gray-700">Complexity</th>
+                                                <th className="text-left px-6 py-4 text-sm font-semibold text-gray-700">Contributor</th>
+                                                <th className="text-left px-6 py-4 text-sm font-semibold text-gray-700">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {mockRepoData.files.map((file, index) => (
+                                                <tr key={index} className="border-b border-gray-100 hover:bg-gray-50 transition-colors duration-150">
+                                                    <td className="px-6 py-4">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="text-gray-400">
+                                                                <FileIcon />
+                                                            </div>
+                                                            <span className="text-sm font-medium text-gray-900">{file.name}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <span className="text-sm text-gray-600">{file.type}</span>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <span className="text-sm text-gray-600">{file.size}</span>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${file.complexity === 'Low' ? 'bg-green-100 text-green-700' :
+                                                                file.complexity === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
+                                                                    'bg-red-100 text-red-700'
+                                                            }`}>
+                                                            {file.complexity}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white text-xs font-semibold">
+                                                            {file.contributor}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <button className="flex items-center gap-2 text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors duration-150">
+                                                            <EyeIcon />
+                                                            <span>View</span>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function App() {
+            const [hasAnalyzed, setHasAnalyzed] = useState(false);
+
+            return (
+                <>
+                    {!hasAnalyzed ? (
+                        <LandingPage onAnalyze={() => setHasAnalyzed(true)} />
+                    ) : (
+                        <Dashboard onBack={() => setHasAnalyzed(false)} />
+                    )}
+                </>
+            );
+        }
+
+        ReactDOM.render(<App />, document.getElementById('root'));
     </script>
 </body>
+
 </html>

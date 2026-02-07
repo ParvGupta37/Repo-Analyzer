@@ -287,29 +287,67 @@ Analyze based on README and file structure. Use evidence only. Be concise. Retur
         Answer question using pre-analyzed data.
         This is a SEPARATE call (for Q&A), not part of initial analysis.
         """
-        # Build concise context from analysis
+        # Build rich context from analysis
+        tech_details = "\n".join([
+            f"- {t.name} ({t.category})" + (f" v{t.version}" if t.version else "")
+            for t in analysis.tech_stack[:8]
+        ])
+        
+        comp_details = "\n".join([
+            f"- {c.name}: {c.purpose}"
+            for c in analysis.components[:5]
+        ])
+        
+        setup_details = "\n".join([
+            f"{i+1}. {step}"
+            for i, step in enumerate(analysis.setup_steps[:5])
+        ])
+        
         context_str = f"""Repository Analysis:
-Summary: {analysis.summary}
-Purpose: {analysis.purpose}
-Tech Stack: {', '.join([t.name for t in analysis.tech_stack])}
-Architecture: {analysis.architecture_pattern}
-Components: {', '.join([c.name for c in analysis.components])}
+
+OVERVIEW:
+{analysis.summary}
+
+PURPOSE:
+{analysis.purpose}
+
+TECH STACK:
+{tech_details}
+
+ARCHITECTURE:
+Pattern: {analysis.architecture_pattern}
+{analysis.data_flow}
+
+COMPONENTS:
+{comp_details if comp_details else "Not specified"}
+
+SETUP:
+{setup_details if setup_details else "Not specified"}
+
+CONTRIBUTION AREAS:
+{', '.join(analysis.contribution_areas) if analysis.contribution_areas else "Not specified"}
+
+KNOWN ISSUES:
+{', '.join(analysis.known_issues[:3]) if analysis.known_issues else "None identified"}
 
 {additional_context}
 """
         
-        prompt = f"""Answer this question about the repository. Be CONCISE (max 100 words).
+        prompt = f"""Answer this question about the repository using ONLY the provided analysis data.
 
 Question: {question}
 
-Context:
+Repository Analysis Data:
 {context_str}
 
-Rules:
-- Answer in 2-4 sentences maximum
-- Be specific and direct
-- No fluff or filler
-- If unsure, say so briefly
+CRITICAL RULES:
+1. Answer in 2-5 sentences (50-150 words max)
+2. Be specific and reference actual data from the analysis
+3. DO NOT make up information not in the analysis
+4. If the analysis doesn't contain the answer, say so briefly
+5. DO NOT just repeat the summary - answer the specific question asked
+6. Use a natural, helpful tone
+7. Focus on what's relevant to the question
 
 Answer:"""
         
@@ -321,6 +359,45 @@ Answer:"""
                 )
                 return response.text.strip()
             except Exception as e:
-                return f"Unable to answer due to API limitation. Based on analysis: {analysis.summary}"
+                # Fallback to simple response
+                return self._generate_fallback_answer(question, analysis)
         else:
-            return f"Based on analysis: {analysis.summary[:150]}"
+            return self._generate_fallback_answer(question, analysis)
+    
+    def _generate_fallback_answer(self, question: str, analysis: RepositoryAnalysis) -> str:
+        """Generate a simple answer when Gemini is unavailable."""
+        question_lower = question.lower()
+        
+        if any(word in question_lower for word in ['what is', 'what does', 'about', 'overview']):
+            return f"{analysis.summary} {analysis.purpose}"
+        
+        elif any(word in question_lower for word in ['tech', 'technology', 'stack', 'built with', 'language']):
+            tech_list = ', '.join([t.name for t in analysis.tech_stack[:5]])
+            return f"This project uses {tech_list}. The architecture follows a {analysis.architecture_pattern} pattern."
+        
+        elif any(word in question_lower for word in ['architecture', 'structure', 'organized', 'design']):
+            comp_list = ', '.join([c.name for c in analysis.components[:4]])
+            return f"Architecture: {analysis.architecture_pattern}. Main components: {comp_list}. {analysis.data_flow}"
+        
+        elif any(word in question_lower for word in ['contribute', 'help', 'start', 'setup', 'install']):
+            if analysis.setup_steps:
+                steps = '; '.join(analysis.setup_steps[:4])
+                return f"To get started: {steps}"
+            return "Setup instructions are not detailed in the analysis. Check the repository README."
+        
+        elif any(word in question_lower for word in ['issue', 'problem', 'bug', 'risk']):
+            issues = analysis.known_issues[:3] if analysis.known_issues else []
+            risks = analysis.risky_areas[:2] if analysis.risky_areas else []
+            
+            if issues or risks:
+                result = []
+                if issues:
+                    result.append(f"Known issues: {', '.join(issues)}")
+                if risks:
+                    result.append(f"Risky areas: {', '.join(risks)}")
+                return ". ".join(result) + "."
+            return "No specific issues or risks identified in the analysis."
+        
+        else:
+            # Default: provide overview
+            return f"{analysis.summary} It uses {', '.join([t.name for t in analysis.tech_stack[:3]])} with a {analysis.architecture_pattern} architecture."

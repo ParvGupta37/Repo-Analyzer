@@ -57,8 +57,8 @@ class AnalysisServiceFinal:
             repo_id = existing_repo.id
         else:
             repo_id = str(uuid.uuid4())
-    
-        # Create minimal repository record
+            
+            # Create minimal repository record
             repository = Repository(
                 id=repo_id,
                 repo_url=repo_url,
@@ -67,17 +67,12 @@ class AnalysisServiceFinal:
                 analyzed_at=datetime.utcnow()
             )
             db.add(repository)
-    
-            # CRITICAL: Commit repository FIRST
-            try:
-                await db.commit()
-                print(f"✓ Created repository {repo_id}")
-            except Exception as e:
-                await db.rollback()
-                print(f"✗ Failed to create repository: {str(e)}")
-                raise
-
-        # NOW create analysis session (repo exists in DB)
+            
+            # CRITICAL: Flush to ensure repository exists before creating session
+            # This prevents FOREIGN KEY constraint errors
+            await db.flush()
+        
+        # Create analysis session with 'processing' status
         session_id = str(uuid.uuid4())
         session = AnalysisSession(
             id=session_id,
@@ -87,15 +82,10 @@ class AnalysisServiceFinal:
             gemini_call_count=0
         )
         db.add(session)
-
-        # Commit session
+        
+        # CRITICAL: Commit synchronously so status is persisted
         try:
             await db.commit()
-            print(f"✓ Created analysis session {session_id} for {repo_url}")
-        except Exception as e:
-            await db.rollback()
-            print(f"✗ Failed to create analysis session: {str(e)}")
-            raise
             print(f"✓ Created analysis session {session_id} for {repo_url}")
         except Exception as e:
             await db.rollback()
@@ -520,45 +510,58 @@ class AnalysisServiceFinal:
     
     async def answer_question(self, repo_id: str, question: str, db: AsyncSession) -> Dict:
         """
-        Answer question using ONLY stored data.
-        ZERO Gemini calls - deterministic, read-only operation.
+        Answer question using stored analysis data + Gemini for intelligent responses.
+        Uses ONE Gemini call per question for better quality.
         """
         # Get stored analysis
         analysis_data = await self.get_analysis(repo_id, db)
         
-        # Build simple context-based answer from stored data
-        # This is deterministic and requires NO Gemini call
+        # Reconstruct Pydantic model for Gemini
+        from services.gemini_service import RepositoryAnalysis
         
-        question_lower = question.lower()
+        # Get raw analysis response
+        result = await db.execute(
+            select(RawAnalysisResponse).where(RawAnalysisResponse.repo_id == repo_id)
+        )
+        raw_response = result.scalar_one_or_none()
         
-        # Simple keyword matching for common questions
-        if any(word in question_lower for word in ['what is', 'what does', 'about', 'purpose']):
-            answer = f"{analysis_data['summary']} {analysis_data['purpose']}"
-        
-        elif any(word in question_lower for word in ['tech', 'technology', 'stack', 'built', 'language']):
-            tech_list = ', '.join([t['name'] for t in analysis_data['tech_stack'][:5]])
-            answer = f"This project uses: {tech_list}. Primary language: {analysis_data['tech_stack'][0]['name'] if analysis_data['tech_stack'] else 'Unknown'}."
-        
-        elif any(word in question_lower for word in ['architecture', 'structure', 'organized']):
-            answer = f"Architecture: {analysis_data['architecture_pattern']}. {analysis_data['data_flow']}"
-        
-        elif any(word in question_lower for word in ['contribute', 'help', 'start']):
-            if analysis_data['setup_steps']:
-                steps = ' → '.join(analysis_data['setup_steps'][:3])
-                answer = f"To contribute: {steps}"
-            else:
-                answer = "Setup instructions not available in analysis."
-        
-        elif any(word in question_lower for word in ['issue', 'problem', 'bug']):
-            if analysis_data['known_issues']:
-                issues = ', '.join(analysis_data['known_issues'][:3])
-                answer = f"Known issues: {issues}"
-            else:
-                answer = "No specific issues identified in analysis."
-        
+        if raw_response:
+            # Parse the stored Pydantic model
+            analysis_obj = RepositoryAnalysis(**json.loads(raw_response.raw_json))
         else:
-            # Default: return summary
-            answer = analysis_data['summary']
+            # Fallback: construct from analysis_data
+            from services.gemini_service import TechStackItem, ComponentItem, FileInsight
+            
+            analysis_obj = RepositoryAnalysis(
+                summary=analysis_data['summary'],
+                purpose=analysis_data['purpose'],
+                tech_stack=[TechStackItem(**t) for t in analysis_data['tech_stack']],
+                primary_language=analysis_data.get('primary_language', 'Unknown'),
+                architecture_pattern=analysis_data['architecture_pattern'],
+                components=[ComponentItem(**c) for c in analysis_data.get('components', [])],
+                data_flow=analysis_data['data_flow'],
+                key_files=[FileInsight(**f) for f in analysis_data.get('key_files', [])],
+                setup_steps=analysis_data.get('setup_steps', []),
+                contribution_areas=analysis_data.get('contribution_areas', []),
+                risky_areas=analysis_data.get('risky_areas', []),
+                known_issues=analysis_data.get('known_issues', []),
+                confidence_score=analysis_data.get('confidence_score', 0.8)
+            )
+        
+        # Build additional context
+        key_files_context = "\n".join([
+            f"- {f['path']}: {f['purpose']}"
+            for f in analysis_data.get('key_files', [])[:5]
+        ])
+        
+        additional_context = f"Key Files:\n{key_files_context}" if key_files_context else ""
+        
+        # Use Gemini to answer with context
+        answer = await self.gemini.answer_question(
+            question=question,
+            analysis=analysis_obj,
+            additional_context=additional_context
+        )
         
         # Log Q&A
         qa_id = str(uuid.uuid4())
