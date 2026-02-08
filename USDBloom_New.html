@@ -867,11 +867,11 @@
                                                 <div className="bg-white rounded-2xl p-6 shadow-sm border border-purple-100">
                                                     <div className="flex items-center justify-between mb-3">
                                                         <span className="text-slate-600 text-sm font-medium">Confidence</span>
-                                                        <div className="w-10 h-10 bg-violet-100 rounded-xl flex items-center justify-center">
+                                                        <div className="w-10 h-10 bg-violet-500 rounded-xl flex items-center justify-center">
                                                             <BarChartIcon />
                                                         </div>
                                                     </div>
-                                                    <p className="text-4xl font-bold gradient-text">
+                                                    <p className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-violet-600 bg-clip-text text-transparent">
                                                         {Math.round((analysisData.confidence_score || 0) * 100)}%
                                                     </p>
                                                     <p className="text-xs text-slate-500 mt-1">Analysis accuracy</p>
@@ -880,7 +880,7 @@
                                                 <div className="bg-white rounded-2xl p-6 shadow-sm border border-purple-100">
                                                     <div className="flex items-center justify-between mb-3">
                                                         <span className="text-slate-600 text-sm font-medium">Technologies</span>
-                                                        <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+                                                        <div className="w-10 h-10 bg-purple-500 rounded-xl flex items-center justify-center">
                                                             <CodeIcon />
                                                         </div>
                                                     </div>
@@ -893,7 +893,7 @@
                                                 <div className="bg-white rounded-2xl p-6 shadow-sm border border-purple-100">
                                                     <div className="flex items-center justify-between mb-3">
                                                         <span className="text-slate-600 text-sm font-medium">Components</span>
-                                                        <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
+                                                        <div className="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center">
                                                             <LayersIcon />
                                                         </div>
                                                     </div>
@@ -1102,7 +1102,7 @@
                                                         onChange={(e) => setCurrentQuestion(e.target.value)}
                                                         onKeyPress={(e) => e.key === 'Enter' && handleAskQuestion()}
                                                         placeholder="Ask a question about this repository..."
-                                                        className="flex-1 px-6 py-4 bg-slate-50 border-2 border-purple-100 rounded-2xl outline-none focus:border-violet-400 transition-all"
+                                                        className="flex-1 px-6 py-4 bg-slate-50 border-2 border-purple-100 rounded-2xl outline-none focus:border-violet-400 transition-all text-slate-900 placeholder-slate-500"
                                                         disabled={isAsking}
                                                     />
                                                     <button

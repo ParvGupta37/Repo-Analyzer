@@ -4,6 +4,7 @@ A complete backend system that analyzes GitHub repositories to help new develope
 
 ## Features
 
+### Core Analysis
 - **Automated Repository Analysis**: Fetches and analyzes repository structure, code, and issues
 - **AI-Powered Insights**: Uses Gemini LLM to generate:
   - Project overview
@@ -13,8 +14,21 @@ A complete backend system that analyzes GitHub repositories to help new develope
   - Contributor guide for new developers
 - **Intelligent File Filtering**: Focuses on important files (entry points, configs, core modules)
 - **Context-Aware Q&A**: Answer questions about the repository using analyzed context
+
+### Advanced Features (NEW)
+- **Real-time Progress**: WebSocket support for live analysis updates
+- **Code Quality Metrics**: Automated scoring for documentation, tests, organization, and dependencies
+- **Comparative Analysis**: Compare multiple repositories across tech stack, architecture, and complexity
+- **Smart Caching**: Reduces GitHub API calls and improves response times
+- **Rate Limiting**: Prevents abuse with configurable request limits
+- **Structured Logging**: JSON-formatted logs for production monitoring
+
+### Production Ready
 - **Async Architecture**: Non-blocking analysis using FastAPI background tasks
 - **SQLite Database**: Stores all analysis results for quick retrieval
+- **Comprehensive Testing**: pytest-based test suite with 70%+ coverage target
+- **CI/CD Pipeline**: Automated testing with GitHub Actions
+- **Deployment Ready**: Docker support, multiple deployment options
 
 ## Tech Stack
 
@@ -139,7 +153,7 @@ Once running, access interactive API docs at:
 
 ### Endpoints
 
-#### 1. Analyze Repository
+#### 1. Analyze Repository (POST /api/analyze-repo)
 
 **POST** `/api/analyze-repo`
 
@@ -202,7 +216,70 @@ curl -X POST http://localhost:8000/api/ask \
   }'
 ```
 
-#### 3. Health Check
+#### 3. Get Analysis Status (GET /api/status/{repo_id})
+
+Check the status of an ongoing or completed analysis.
+
+#### 4. Get Code Quality Metrics (GET /api/code-quality/{repo_id})
+
+Get automated code quality scores for a repository.
+
+**Response:**
+```json
+{
+  "repo_id": "uuid",
+  "repo_name": "owner/repo",
+  "metrics": {
+    "documentation_score": 8.5,
+    "test_coverage_estimate": 65,
+    "code_organization": 9.0,
+    "dependency_health": 7.5,
+    "overall_score": 7.8,
+    "strengths": ["Excellent documentation"],
+    "improvements": ["Increase test coverage"]
+  }
+}
+```
+
+#### 5. Compare Repositories (POST /api/compare)
+
+Compare multiple repositories across different dimensions.
+
+**Request:**
+```json
+{
+  "repo_ids": ["uuid1", "uuid2"],
+  "comparison_type": "tech_stack"
+}
+```
+
+**Response:**
+```json
+{
+  "comparison_type": "tech_stack",
+  "repositories": ["owner1/repo1", "owner2/repo2"],
+  "common_technologies": ["Python", "FastAPI"],
+  "unique_technologies": {
+    "owner1/repo1": ["Redis"],
+    "owner2/repo2": ["PostgreSQL"]
+  }
+}
+```
+
+#### 6. WebSocket Progress (WS /ws/analysis/{repo_id})
+
+Connect to receive real-time analysis progress updates.
+
+**Example:**
+```javascript
+const ws = new WebSocket('ws://localhost:8000/ws/analysis/repo-id');
+ws.onmessage = (event) => {
+  const update = JSON.parse(event.data);
+  console.log(update.message);
+};
+```
+
+#### 7. Health Check
 
 **GET** `/api/health`
 

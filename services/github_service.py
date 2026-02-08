@@ -7,6 +7,8 @@ import os
 import re
 from typing import Optional, Dict, List, Tuple
 from datetime import datetime
+from services.cache_service import get_cache
+from utils.logger import get_logger
 
 
 class GitHubService:
@@ -21,6 +23,9 @@ class GitHubService:
         }
         if self.token:
             self.headers["Authorization"] = f"token {self.token}"
+        
+        self.cache = get_cache()
+        self.logger = get_logger(__name__)
     
     def parse_repo_url(self, repo_url: str) -> Tuple[str, str]:
         """
@@ -46,28 +51,34 @@ class GitHubService:
         return owner, repo
     
     async def get_repo_metadata(self, owner: str, repo: str) -> Dict:
-        """Fetch repository metadata from GitHub API."""
-        url = f"{self.BASE_URL}/repos/{owner}/{repo}"
+        """Fetch repository metadata from GitHub API with caching."""
+        cache_key = self.cache._generate_key("github:metadata", owner, repo)
         
-        # Create client with SSL verification disabled for potential corporate proxies
-        async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
-            try:
-                response = await client.get(url, headers=self.headers)
-                response.raise_for_status()
-                return response.json()
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 404:
-                    raise ValueError(f"Repository not found: {owner}/{repo}")
-                elif e.response.status_code == 403:
-                    raise ValueError("GitHub API rate limit exceeded. Please add GITHUB_TOKEN to .env")
-                else:
-                    raise ValueError(f"GitHub API error: {e.response.status_code}")
-            except httpx.ConnectError as e:
-                raise ValueError(f"Failed to connect to GitHub: Connection error. Check your internet connection.")
-            except httpx.TimeoutException as e:
-                raise ValueError(f"Failed to connect to GitHub: Request timed out. Check your internet connection.")
-            except httpx.RequestError as e:
-                raise ValueError(f"Failed to connect to GitHub: {str(e)}")
+        async def fetch():
+            url = f"{self.BASE_URL}/repos/{owner}/{repo}"
+            
+            # Create client with SSL verification disabled for potential corporate proxies
+            async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
+                try:
+                    self.logger.info("Fetching repo metadata", owner=owner, repo=repo)
+                    response = await client.get(url, headers=self.headers)
+                    response.raise_for_status()
+                    return response.json()
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 404:
+                        raise ValueError(f"Repository not found: {owner}/{repo}")
+                    elif e.response.status_code == 403:
+                        raise ValueError("GitHub API rate limit exceeded. Please add GITHUB_TOKEN to .env")
+                    else:
+                        raise ValueError(f"GitHub API error: {e.response.status_code}")
+                except httpx.ConnectError as e:
+                    raise ValueError(f"Failed to connect to GitHub: Connection error. Check your internet connection.")
+                except httpx.TimeoutException as e:
+                    raise ValueError(f"Failed to connect to GitHub: Request timed out. Check your internet connection.")
+                except httpx.RequestError as e:
+                    raise ValueError(f"Failed to connect to GitHub: {str(e)}")
+        
+        return await self.cache.get_or_fetch(cache_key, fetch, ttl=3600)
     
     async def get_readme(self, owner: str, repo: str) -> Optional[str]:
         """Fetch README content."""

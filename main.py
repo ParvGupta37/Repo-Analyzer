@@ -6,18 +6,27 @@ Features:
 - Guaranteed persistence
 - Single Gemini call per repo
 - Zero Gemini calls in /api/ask
+- Rate limiting
+- Structured logging
 """
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
+from slowapi.errors import RateLimitExceeded
 
 from db.database import init_db
 from routes.api import router
+from utils.rate_limiter import get_limiter
+from utils.logger import get_logger
 
 # Load environment variables
 load_dotenv()
+
+# Initialize logger
+logger = get_logger(__name__)
 
 
 @asynccontextmanager
@@ -78,6 +87,18 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Add rate limiter
+limiter = get_limiter()
+app.state.limiter = limiter
+
+# Add rate limit exception handler
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Rate limit exceeded. Please try again later."}
+    )
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -89,6 +110,10 @@ app.add_middleware(
 
 # Include API routes
 app.include_router(router, prefix="/api", tags=["analysis"])
+
+# Include WebSocket routes
+from routes.websocket import router as ws_router
+app.include_router(ws_router, tags=["websocket"])
 
 
 @app.get("/")

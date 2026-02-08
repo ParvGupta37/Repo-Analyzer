@@ -201,7 +201,7 @@ CRITICAL REQUIREMENTS:
 Return JSON with these exact keys:
 
 {{
-  "summary": "2-3 sentence explanation of what this project does",
+  "summary": "1-2 sentence explanation of what this project does",
   "purpose": "What problem does this solve (max 150 chars)",
   "tech_stack": [
     {{
