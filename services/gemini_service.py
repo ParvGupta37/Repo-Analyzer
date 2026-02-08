@@ -43,8 +43,8 @@ class FileInsight(BaseModel):
 class RepositoryAnalysis(BaseModel):
     """Complete repository analysis - single structured response."""
     
-    # Core summary (short, scannable)
-    summary: str = Field(..., min_length=50, max_length=300, description="2-3 sentence project summary")
+    # Core summary (comprehensive overview)
+    summary: str = Field(..., min_length=200, max_length=1500, description="10-20 sentence comprehensive project summary")
     purpose: str = Field(..., max_length=150, description="What problem this solves")
     
     # Tech stack
@@ -201,7 +201,7 @@ CRITICAL REQUIREMENTS:
 Return JSON with these exact keys:
 
 {{
-  "summary": "1-2 sentence explanation of what this project does",
+  "summary": "Comprehensive 10-20 sentence explanation covering: what this project does, its main features, key technologies used, target audience, primary use cases, and overall architecture approach. Be thorough and detailed.",
   "purpose": "What problem does this solve (max 150 chars)",
   "tech_stack": [
     {{
@@ -254,8 +254,8 @@ Analyze based on README and file structure. Use evidence only. Be concise. Retur
     
     def _fallback_analysis(self, context: Dict) -> RepositoryAnalysis:
         """Deterministic fallback when Gemini unavailable."""
-        primary_lang = context.get('primary_language', 'Unknown')
-        repo_name = context.get('repo_name', 'Unknown')
+        primary_lang = context.get('primary_language') or 'Unknown'
+        repo_name = context.get('repo_name') or 'Unknown Repository'
         
         return RepositoryAnalysis(
             summary=f"{repo_name} is a {primary_lang} project. Analysis limited due to API constraints.",

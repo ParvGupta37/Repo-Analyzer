@@ -23,6 +23,7 @@
             background: #0a0a0f;
             color: #ffffff;
             overflow-x: hidden;
+            font-size: 17px;
         }
 
         /* 3D Sphere Effect */
@@ -58,6 +59,14 @@
             bottom: 20%;
             left: 15%;
             animation-delay: 2s;
+        }
+
+        .sphere-4 {
+            width: 180px;
+            height: 180px;
+            bottom: 15%;
+            right: 12%;
+            animation-delay: 3s;
         }
 
         @keyframes float {
@@ -373,7 +382,7 @@
                 <div className="bg-[#0a0a0f] min-h-screen">
                     {/* Navbar */}
                     <nav className="border-b border-gray-800 bg-black/50 backdrop-blur-sm sticky top-0 z-50">
-                        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+                        <div className="max-w-full mx-auto px-12 py-4 flex items-center justify-between">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-violet-600 flex items-center justify-center">
                                     <SparklesIcon />
@@ -400,12 +409,15 @@
                         <div className="sphere sphere-1"></div>
                         <div className="sphere sphere-2"></div>
                         <div className="sphere sphere-3"></div>
+                        <div className="sphere sphere-4"></div>
 
                         {/* Hero Content */}
                         <div className="relative z-10 max-w-6xl mx-auto px-6 text-center py-20">
-                            <div className="text-6xl md:text-7xl font-bold mb-6 leading-tight">
-                                <span className="gradient-text">Where Code Grows</span>
+                            {/* RepoLens Branding - Now at Top */}
+                            <div className="mb-8">
+                                <h1 className="text-8xl md:text-9xl font-bold gradient-text mb-4">RepoLens</h1>
                             </div>
+
                             <p className="text-xl text-gray-300 max-w-2xl mx-auto leading-relaxed mb-12">
                                 AI-powered repository analysis. Understand any codebase in seconds with intelligent insights and natural language Q&A.
                             </p>
@@ -751,9 +763,9 @@
             ];
 
             return (
-                <div className="min-h-screen flex">
+                <div className="min-h-screen flex bg-gradient-to-br from-violet-900 via-purple-800 to-violet-900">
                     {/* Sidebar */}
-                    <div className="w-72 bg-gradient-to-b from-violet-900 via-violet-800 to-purple-900 text-white p-6 flex flex-col">
+                    <div className="w-80 text-white p-6 flex flex-col relative z-10">
                         {/* Brand */}
                         <div className="mb-8">
                             <div className="flex items-center gap-3 mb-2">
@@ -785,7 +797,7 @@
 
                         {/* Status */}
                         <div className="mt-6 p-4 bg-white/10 rounded-xl backdrop-blur-sm">
-                            <div className="flex items-center gap-2 mb-2">
+                            <div className="flex items-center gap-2">
                                 {status === 'completed' ? (
                                     <>
                                         <CheckCircleIcon />
@@ -803,418 +815,441 @@
                                     </>
                                 )}
                             </div>
-                            {status === 'processing' && (
-                                <div className="w-full bg-white/20 rounded-full h-1.5 mt-2">
-                                    <div className="bg-white h-1.5 rounded-full animate-pulse" style={{ width: '70%' }}></div>
-                                </div>
-                            )}
+                        </div>
+
+                        {/* Decorative Visual Element */}
+                        <div className="mt-auto mb-4">
+                            <svg viewBox="0 0 200 150" className="w-full opacity-60">
+                                <defs>
+                                    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" style={{ stopColor: '#c084fc', stopOpacity: 1 }} />
+                                        <stop offset="100%" style={{ stopColor: '#7c3aed', stopOpacity: 1 }} />
+                                    </linearGradient>
+                                </defs>
+                                {/* Abstract geometric shapes */}
+                                <circle cx="50" cy="100" r="30" fill="url(#grad1)" opacity="0.6" />
+                                <circle cx="80" cy="80" r="20" fill="#a78bfa" opacity="0.7" />
+                                <circle cx="120" cy="90" r="25" fill="#c084fc" opacity="0.5" />
+                                <path d="M 30 120 Q 100 60 170 110" stroke="#e0e7ff" strokeWidth="3" fill="none" opacity="0.4" />
+                                <circle cx="150" cy="70" r="15" fill="#ddd6fe" opacity="0.6" />
+                            </svg>
                         </div>
 
                         {/* Back Button */}
                         <button
                             onClick={onBack}
-                            className="mt-4 px-4 py-3 bg-white/10 hover:bg-white/20 rounded-xl transition-all text-sm font-medium"
+                            className="px-4 py-3 bg-white/10 hover:bg-white/20 rounded-xl transition-all text-sm font-medium"
                         >
                             ← New Analysis
                         </button>
                     </div>
 
-                    {/* Main Content */}
-                    <div className="flex-1 bg-slate-50 overflow-auto">
-                        <div className="max-w-7xl mx-auto p-8">
-                            {error && (
-                                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-3">
-                                    <XCircleIcon />
-                                    <div>
-                                        <p className="text-red-700 font-medium">Error</p>
-                                        <p className="text-red-600 text-sm mt-1">{error}</p>
-                                    </div>
-                                </div>
-                            )}
-
-                            {status === 'processing' && activeTab === 'overview' && (
-                                <div className="flex flex-col items-center justify-center py-20">
-                                    <div className="w-20 h-20 bg-gradient-to-br from-violet-600 to-purple-600 rounded-3xl flex items-center justify-center mb-6 pulse-glow">
-                                        <LoaderIcon />
-                                    </div>
-                                    <h2 className="text-3xl font-bold text-slate-800 mb-3">Analyzing Repository</h2>
-                                    <p className="text-slate-600 mb-8">This typically takes 30-60 seconds</p>
-                                    <div className="space-y-3 w-full max-w-md">
-                                        <div className="flex items-center gap-3 p-4 bg-white rounded-xl shadow-sm">
-                                            <CheckCircleIcon />
-                                            <span className="text-slate-700">Fetching repository data</span>
+                    {/* Main Content - Overlay Style */}
+                    <div className="flex-1 overflow-auto relative">
+                        <div className="absolute inset-0 p-8 ml-[-2rem]">
+                            <div className="bg-white rounded-3xl shadow-2xl min-h-full p-8">
+                                {error && (
+                                    <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-3">
+                                        <XCircleIcon />
+                                        <div>
+                                            <p className="text-red-700 font-medium">Error</p>
+                                            <p className="text-red-600 text-sm mt-1">{error}</p>
                                         </div>
-                                        <div className="flex items-center gap-3 p-4 bg-white rounded-xl shadow-sm">
+                                    </div>
+                                )}
+
+                                {status === 'processing' && activeTab === 'overview' && (
+                                    <div className="flex flex-col items-center justify-center min-h-[70vh]">
+                                        <div className="w-32 h-32 bg-gradient-to-br from-violet-600 to-purple-600 rounded-3xl flex items-center justify-center mb-8 shadow-2xl">
                                             <LoaderIcon />
-                                            <span className="text-slate-700">Analyzing codebase structure</span>
                                         </div>
-                                        <div className="flex items-center gap-3 p-4 bg-white/50 rounded-xl">
-                                            <div className="w-5 h-5"></div>
-                                            <span className="text-slate-400">Generating AI insights</span>
+                                        <h2 className="text-4xl font-bold text-slate-800 mb-4">Analyzing Repository</h2>
+                                        <p className="text-slate-600 text-xl mb-12">This typically takes 30-60 seconds</p>
+
+                                        {/* Large Prominent Loading Bar */}
+                                        <div className="w-full max-w-md mb-12">
+                                            <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden shadow-inner">
+                                                <div className="h-3 bg-gradient-to-r from-violet-600 via-purple-600 to-violet-600 rounded-full animate-pulse" style={{ width: '70%', transition: 'width 0.3s ease' }}></div>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4 w-full max-w-lg">
+                                            <div className="flex items-center gap-4 p-5 bg-white rounded-2xl shadow-md border-l-4 border-green-500">
+                                                <CheckCircleIcon />
+                                                <span className="text-slate-700 font-medium text-lg">Fetching repository data</span>
+                                            </div>
+                                            <div className="flex items-center gap-4 p-5 bg-white rounded-2xl shadow-md border-l-4 border-violet-500">
+                                                <LoaderIcon />
+                                                <span className="text-slate-700 font-medium text-lg">Analyzing codebase structure</span>
+                                            </div>
+                                            <div className="flex items-center gap-4 p-5 bg-white/50 rounded-2xl border-l-4 border-gray-300">
+                                                <div className="w-5 h-5"></div>
+                                                <span className="text-slate-400 font-medium text-lg">Generating AI insights</span>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            )}
+                                )}
 
-                            {status === 'completed' && analysisData && (
-                                <>
-                                    {/* Overview Tab */}
-                                    {activeTab === 'overview' && (
-                                        <div>
-                                            <h2 className="text-3xl font-bold text-slate-800 mb-8">Project Overview</h2>
+                                {status === 'completed' && analysisData && (
+                                    <>
+                                        {/* Overview Tab */}
+                                        {activeTab === 'overview' && (
+                                            <div>
+                                                <h2 className="text-3xl font-bold text-slate-800 mb-8">Project Overview</h2>
 
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                                                <div className="bg-white rounded-2xl p-6 shadow-sm border border-purple-100">
-                                                    <div className="flex items-center justify-between mb-3">
-                                                        <span className="text-slate-600 text-sm font-medium">Confidence</span>
-                                                        <div className="w-10 h-10 bg-violet-500 rounded-xl flex items-center justify-center">
-                                                            <BarChartIcon />
-                                                        </div>
-                                                    </div>
-                                                    <p className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-violet-600 bg-clip-text text-transparent">
-                                                        {Math.round((analysisData.confidence_score || 0) * 100)}%
-                                                    </p>
-                                                    <p className="text-xs text-slate-500 mt-1">Analysis accuracy</p>
-                                                </div>
-
-                                                <div className="bg-white rounded-2xl p-6 shadow-sm border border-purple-100">
-                                                    <div className="flex items-center justify-between mb-3">
-                                                        <span className="text-slate-600 text-sm font-medium">Technologies</span>
-                                                        <div className="w-10 h-10 bg-purple-500 rounded-xl flex items-center justify-center">
-                                                            <CodeIcon />
-                                                        </div>
-                                                    </div>
-                                                    <p className="text-4xl font-bold text-slate-800">
-                                                        {analysisData.tech_stack?.length || 0}
-                                                    </p>
-                                                    <p className="text-xs text-slate-500 mt-1">Detected</p>
-                                                </div>
-
-                                                <div className="bg-white rounded-2xl p-6 shadow-sm border border-purple-100">
-                                                    <div className="flex items-center justify-between mb-3">
-                                                        <span className="text-slate-600 text-sm font-medium">Components</span>
-                                                        <div className="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center">
-                                                            <LayersIcon />
-                                                        </div>
-                                                    </div>
-                                                    <p className="text-4xl font-bold text-slate-800">
-                                                        {analysisData.components?.length || 0}
-                                                    </p>
-                                                    <p className="text-xs text-slate-500 mt-1">Identified</p>
-                                                </div>
-                                            </div>
-
-                                            <div className="bg-white rounded-2xl p-8 shadow-sm border border-purple-100 mb-6">
-                                                <h3 className="text-xl font-bold text-slate-800 mb-4">Summary</h3>
-                                                <p className="text-slate-700 leading-relaxed">{analysisData.summary}</p>
-                                            </div>
-
-                                            <div className="bg-white rounded-2xl p-8 shadow-sm border border-purple-100">
-                                                <h3 className="text-xl font-bold text-slate-800 mb-4">Purpose</h3>
-                                                <p className="text-slate-700 leading-relaxed">{analysisData.purpose}</p>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Tech Stack Tab */}
-                                    {activeTab === 'tech-stack' && (
-                                        <div>
-                                            <h2 className="text-3xl font-bold text-slate-800 mb-8">Technology Stack</h2>
-
-                                            {analysisData.tech_stack && analysisData.tech_stack.length > 0 ? (
-                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                                    {analysisData.tech_stack.map((tech, idx) => (
-                                                        <div key={idx} className="bg-white rounded-2xl p-6 shadow-sm border border-purple-100 hover:shadow-md hover:border-violet-300 transition-all">
-                                                            <div className="flex items-start justify-between mb-3">
-                                                                <h3 className="font-bold text-slate-800 text-lg">{tech.name}</h3>
-                                                                <span className="text-xs bg-violet-100 text-violet-700 px-3 py-1 rounded-full font-medium">
-                                                                    {tech.category}
-                                                                </span>
-                                                            </div>
-                                                            {tech.version && (
-                                                                <p className="text-sm text-slate-600 mb-2">Version: <span className="font-medium">{tech.version}</span></p>
-                                                            )}
-                                                            <div className="mt-3 pt-3 border-t border-slate-100">
-                                                                <p className="text-xs text-slate-500">Why it's used</p>
-                                                                <p className="text-sm text-slate-700 mt-1">Core {tech.category} technology</p>
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                                                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-purple-100">
+                                                        <div className="flex items-center justify-between mb-3">
+                                                            <span className="text-slate-600 text-sm font-medium">Confidence</span>
+                                                            <div className="w-10 h-10 bg-violet-500 rounded-xl flex items-center justify-center">
+                                                                <BarChartIcon />
                                                             </div>
                                                         </div>
-                                                    ))}
+                                                        <p className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-violet-600 bg-clip-text text-transparent">
+                                                            {Math.round((analysisData.confidence_score || 0) * 100)}%
+                                                        </p>
+                                                        <p className="text-xs text-slate-500 mt-1">Analysis accuracy</p>
+                                                    </div>
+
+                                                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-purple-100">
+                                                        <div className="flex items-center justify-between mb-3">
+                                                            <span className="text-slate-600 text-sm font-medium">Technologies</span>
+                                                            <div className="w-10 h-10 bg-purple-500 rounded-xl flex items-center justify-center">
+                                                                <CodeIcon />
+                                                            </div>
+                                                        </div>
+                                                        <p className="text-4xl font-bold text-slate-800">
+                                                            {analysisData.tech_stack?.length || 0}
+                                                        </p>
+                                                        <p className="text-xs text-slate-500 mt-1">Detected</p>
+                                                    </div>
+
+                                                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-purple-100">
+                                                        <div className="flex items-center justify-between mb-3">
+                                                            <span className="text-slate-600 text-sm font-medium">Code Modules</span>
+                                                            <div className="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center">
+                                                                <LayersIcon />
+                                                            </div>
+                                                        </div>
+                                                        <p className="text-4xl font-bold text-slate-800">
+                                                            {analysisData.components?.length || 0}
+                                                        </p>
+                                                        <p className="text-xs text-slate-500 mt-1">Architectural parts</p>
+                                                    </div>
                                                 </div>
-                                            ) : (
-                                                <div className="bg-white rounded-2xl p-12 text-center">
-                                                    <p className="text-slate-600">No technology stack information available</p>
+
+                                                <div className="bg-white rounded-2xl p-8 shadow-sm border border-purple-100 mb-6">
+                                                    <h3 className="text-xl font-bold text-slate-800 mb-4">Summary</h3>
+                                                    <p className="text-slate-700 leading-relaxed">{analysisData.summary}</p>
                                                 </div>
-                                            )}
-                                        </div>
-                                    )}
 
-                                    {/* Architecture Tab */}
-                                    {activeTab === 'architecture' && (
-                                        <div>
-                                            <h2 className="text-3xl font-bold text-slate-800 mb-8">Architecture Overview</h2>
-
-                                            <div className="bg-white rounded-2xl p-8 shadow-sm border border-purple-100 mb-6">
-                                                <h3 className="text-xl font-bold text-slate-800 mb-4">Pattern</h3>
-                                                <p className="text-slate-700 leading-relaxed">{analysisData.architecture_pattern}</p>
+                                                <div className="bg-white rounded-2xl p-8 shadow-sm border border-purple-100">
+                                                    <h3 className="text-xl font-bold text-slate-800 mb-4">Purpose</h3>
+                                                    <p className="text-slate-700 leading-relaxed">{analysisData.purpose}</p>
+                                                </div>
                                             </div>
+                                        )}
 
-                                            <div className="bg-white rounded-2xl p-8 shadow-sm border border-purple-100 mb-6">
-                                                <h3 className="text-xl font-bold text-slate-800 mb-4">Data Flow</h3>
-                                                <p className="text-slate-700 leading-relaxed">{analysisData.data_flow}</p>
-                                            </div>
+                                        {/* Tech Stack Tab */}
+                                        {activeTab === 'tech-stack' && (
+                                            <div>
+                                                <h2 className="text-3xl font-bold text-slate-800 mb-8">Technology Stack</h2>
 
-                                            {analysisData.components && analysisData.components.length > 0 && (
-                                                <div>
-                                                    <h3 className="text-xl font-bold text-slate-800 mb-4">Components</h3>
-                                                    <div className="space-y-4">
-                                                        {analysisData.components.map((comp, idx) => (
-                                                            <div key={idx} className="bg-white rounded-2xl p-6 shadow-sm border border-purple-100">
-                                                                <h4 className="font-bold text-slate-800 text-lg mb-2">{comp.name}</h4>
-                                                                <p className="text-slate-700 mb-4">{comp.purpose}</p>
-                                                                {comp.files && comp.files.length > 0 && (
-                                                                    <div className="flex flex-wrap gap-2">
-                                                                        {comp.files.map((file, fidx) => (
-                                                                            <span key={fidx} className="text-xs bg-slate-100 text-slate-700 px-3 py-1 rounded-lg font-mono">
-                                                                                {file}
-                                                                            </span>
-                                                                        ))}
-                                                                    </div>
+                                                {analysisData.tech_stack && analysisData.tech_stack.length > 0 ? (
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                        {analysisData.tech_stack.map((tech, idx) => (
+                                                            <div key={idx} className="bg-white rounded-2xl p-6 shadow-sm border border-purple-100 hover:shadow-md hover:border-violet-300 transition-all">
+                                                                <div className="flex items-start justify-between mb-3">
+                                                                    <h3 className="font-bold text-slate-800 text-lg">{tech.name}</h3>
+                                                                    <span className="text-xs bg-violet-100 text-violet-700 px-3 py-1 rounded-full font-medium">
+                                                                        {tech.category}
+                                                                    </span>
+                                                                </div>
+                                                                {tech.version && (
+                                                                    <p className="text-sm text-slate-600 mb-2">Version: <span className="font-medium">{tech.version}</span></p>
                                                                 )}
+                                                                <div className="mt-3 pt-3 border-t border-slate-100">
+                                                                    <p className="text-xs text-slate-500">Why it's used</p>
+                                                                    <p className="text-sm text-slate-700 mt-1">Core {tech.category} technology</p>
+                                                                </div>
                                                             </div>
                                                         ))}
                                                     </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-
-                                    {/* Files Tab */}
-                                    {activeTab === 'files' && (
-                                        <div>
-                                            <h2 className="text-3xl font-bold text-slate-800 mb-8">Key Files</h2>
-
-                                            {analysisData.key_files && analysisData.key_files.length > 0 ? (
-                                                <div className="bg-white rounded-2xl shadow-sm border border-purple-100 overflow-hidden">
-                                                    <div className="overflow-x-auto">
-                                                        <table className="w-full">
-                                                            <thead className="bg-gradient-to-r from-violet-50 to-purple-50">
-                                                                <tr>
-                                                                    <th className="text-left px-6 py-4 text-sm font-bold text-slate-700">File Path</th>
-                                                                    <th className="text-left px-6 py-4 text-sm font-bold text-slate-700">Role</th>
-                                                                    <th className="text-left px-6 py-4 text-sm font-bold text-slate-700">Purpose</th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody>
-                                                                {analysisData.key_files.map((file, idx) => (
-                                                                    <tr key={idx} className="border-t border-slate-100 hover:bg-violet-50/30 transition-colors">
-                                                                        <td className="px-6 py-4">
-                                                                            <div className="flex items-center gap-3">
-                                                                                <FileTextIcon />
-                                                                                <span className="text-sm font-medium text-slate-800 font-mono">{file.path}</span>
-                                                                            </div>
-                                                                        </td>
-                                                                        <td className="px-6 py-4">
-                                                                            <span className="inline-flex px-3 py-1 rounded-full text-xs font-medium bg-violet-100 text-violet-700">
-                                                                                {file.role}
-                                                                            </span>
-                                                                        </td>
-                                                                        <td className="px-6 py-4">
-                                                                            <span className="text-sm text-slate-600">{file.purpose}</span>
-                                                                        </td>
-                                                                    </tr>
-                                                                ))}
-                                                            </tbody>
-                                                        </table>
+                                                ) : (
+                                                    <div className="bg-white rounded-2xl p-12 text-center">
+                                                        <p className="text-slate-600">No technology stack information available</p>
                                                     </div>
-                                                </div>
-                                            ) : (
-                                                <div className="bg-white rounded-2xl p-12 text-center">
-                                                    <p className="text-slate-600">No key files identified</p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
+                                                )}
+                                            </div>
+                                        )}
 
-                                    {/* Chat Tab */}
-                                    {activeTab === 'chat' && (
-                                        <div>
-                                            <h2 className="text-3xl font-bold text-slate-800 mb-8">Q&A Chat</h2>
+                                        {/* Architecture Tab */}
+                                        {activeTab === 'architecture' && (
+                                            <div>
+                                                <h2 className="text-3xl font-bold text-slate-800 mb-8">Architecture Overview</h2>
 
-                                            <div className="bg-white rounded-2xl shadow-sm border border-purple-100 p-6">
-                                                <div className="chat-messages mb-6">
-                                                    {chatHistory.length === 0 ? (
-                                                        <div className="text-center py-16">
-                                                            <div className="w-16 h-16 bg-violet-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                                                                <MessageCircleIcon />
-                                                            </div>
-                                                            <p className="text-slate-700 font-medium mb-2">Ask anything about this repository</p>
-                                                            <p className="text-sm text-slate-500 mb-6">Get instant answers powered by AI</p>
-                                                            <div className="flex flex-wrap justify-center gap-2">
-                                                                {[
-                                                                    "What is this project about?",
-                                                                    "How does authentication work?",
-                                                                    "What's the main tech stack?"
-                                                                ].map((suggestion, idx) => (
-                                                                    <button
-                                                                        key={idx}
-                                                                        onClick={() => setCurrentQuestion(suggestion)}
-                                                                        className="px-4 py-2 bg-violet-50 hover:bg-violet-100 text-violet-700 rounded-xl text-sm transition-colors"
-                                                                    >
-                                                                        {suggestion}
-                                                                    </button>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    ) : (
+                                                <div className="bg-white rounded-2xl p-8 shadow-sm border border-purple-100 mb-6">
+                                                    <h3 className="text-xl font-bold text-slate-800 mb-4">Pattern</h3>
+                                                    <p className="text-slate-700 leading-relaxed">{analysisData.architecture_pattern}</p>
+                                                </div>
+
+                                                <div className="bg-white rounded-2xl p-8 shadow-sm border border-purple-100 mb-6">
+                                                    <h3 className="text-xl font-bold text-slate-800 mb-4">Data Flow</h3>
+                                                    <p className="text-slate-700 leading-relaxed">{analysisData.data_flow}</p>
+                                                </div>
+
+                                                {analysisData.components && analysisData.components.length > 0 && (
+                                                    <div>
+                                                        <h3 className="text-xl font-bold text-slate-800 mb-4">Components</h3>
                                                         <div className="space-y-4">
-                                                            {chatHistory.map((msg, idx) => (
-                                                                <div key={idx} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                                                    {msg.type === 'typing' ? (
-                                                                        <div className="bg-slate-100 rounded-2xl px-6 py-4 max-w-[80%]">
-                                                                            <div className="typing-indicator flex gap-1">
-                                                                                <span className="w-2 h-2 bg-slate-400 rounded-full"></span>
-                                                                                <span className="w-2 h-2 bg-slate-400 rounded-full"></span>
-                                                                                <span className="w-2 h-2 bg-slate-400 rounded-full"></span>
-                                                                            </div>
-                                                                        </div>
-                                                                    ) : (
-                                                                        <div className={`rounded-2xl px-6 py-4 max-w-[80%] ${msg.type === 'user'
-                                                                            ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white'
-                                                                            : msg.type === 'error'
-                                                                                ? 'bg-red-50 text-red-700 border border-red-200'
-                                                                                : 'bg-slate-100 text-slate-800'
-                                                                            }`}>
-                                                                            <p className="text-sm leading-relaxed">{msg.text}</p>
+                                                            {analysisData.components.map((comp, idx) => (
+                                                                <div key={idx} className="bg-white rounded-2xl p-6 shadow-sm border border-purple-100">
+                                                                    <h4 className="font-bold text-slate-800 text-lg mb-2">{comp.name}</h4>
+                                                                    <p className="text-slate-700 mb-4">{comp.purpose}</p>
+                                                                    {comp.files && comp.files.length > 0 && (
+                                                                        <div className="flex flex-wrap gap-2">
+                                                                            {comp.files.map((file, fidx) => (
+                                                                                <span key={fidx} className="text-xs bg-slate-100 text-slate-700 px-3 py-1 rounded-lg font-mono">
+                                                                                    {file}
+                                                                                </span>
+                                                                            ))}
                                                                         </div>
                                                                     )}
                                                                 </div>
                                                             ))}
-                                                            <div ref={chatEndRef} />
                                                         </div>
-                                                    )}
-                                                </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
 
-                                                <div className="flex gap-3">
-                                                    <input
-                                                        type="text"
-                                                        value={currentQuestion}
-                                                        onChange={(e) => setCurrentQuestion(e.target.value)}
-                                                        onKeyPress={(e) => e.key === 'Enter' && handleAskQuestion()}
-                                                        placeholder="Ask a question about this repository..."
-                                                        className="flex-1 px-6 py-4 bg-slate-50 border-2 border-purple-100 rounded-2xl outline-none focus:border-violet-400 transition-all text-slate-900 placeholder-slate-500"
-                                                        disabled={isAsking}
-                                                    />
-                                                    <button
-                                                        onClick={handleAskQuestion}
-                                                        disabled={isAsking || !currentQuestion.trim()}
-                                                        className="px-6 py-4 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-2xl hover:shadow-lg hover:shadow-violet-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                                                    >
-                                                        {isAsking ? <LoaderIcon /> : <SendIcon />}
-                                                        <span className="font-medium">Send</span>
-                                                    </button>
+                                        {/* Files Tab */}
+                                        {activeTab === 'files' && (
+                                            <div>
+                                                <h2 className="text-3xl font-bold text-slate-800 mb-8">Key Files</h2>
+
+                                                {analysisData.key_files && analysisData.key_files.length > 0 ? (
+                                                    <div className="bg-white rounded-2xl shadow-sm border border-purple-100 overflow-hidden">
+                                                        <div className="overflow-x-auto">
+                                                            <table className="w-full">
+                                                                <thead className="bg-gradient-to-r from-violet-50 to-purple-50">
+                                                                    <tr>
+                                                                        <th className="text-left px-6 py-4 text-sm font-bold text-slate-700">File Path</th>
+                                                                        <th className="text-left px-6 py-4 text-sm font-bold text-slate-700">Role</th>
+                                                                        <th className="text-left px-6 py-4 text-sm font-bold text-slate-700">Purpose</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {analysisData.key_files.map((file, idx) => (
+                                                                        <tr key={idx} className="border-t border-slate-100 hover:bg-violet-50/30 transition-colors">
+                                                                            <td className="px-6 py-4">
+                                                                                <div className="flex items-center gap-3">
+                                                                                    <FileTextIcon />
+                                                                                    <span className="text-sm font-medium text-slate-800 font-mono">{file.path}</span>
+                                                                                </div>
+                                                                            </td>
+                                                                            <td className="px-6 py-4">
+                                                                                <span className="inline-flex px-3 py-1 rounded-full text-xs font-medium bg-violet-100 text-violet-700">
+                                                                                    {file.role}
+                                                                                </span>
+                                                                            </td>
+                                                                            <td className="px-6 py-4">
+                                                                                <span className="text-sm text-slate-600">{file.purpose}</span>
+                                                                            </td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="bg-white rounded-2xl p-12 text-center">
+                                                        <p className="text-slate-600">No key files identified</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Chat Tab */}
+                                        {activeTab === 'chat' && (
+                                            <div>
+                                                <h2 className="text-3xl font-bold text-slate-800 mb-8">Q&A Chat</h2>
+
+                                                <div className="bg-white rounded-2xl shadow-sm border border-purple-100 p-6">
+                                                    <div className="chat-messages mb-6">
+                                                        {chatHistory.length === 0 ? (
+                                                            <div className="text-center py-16">
+                                                                <div className="w-16 h-16 bg-violet-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                                                    <MessageCircleIcon />
+                                                                </div>
+                                                                <p className="text-slate-700 font-medium mb-2">Ask anything about this repository</p>
+                                                                <p className="text-sm text-slate-500 mb-6">Get instant answers powered by AI</p>
+                                                                <div className="flex flex-wrap justify-center gap-2">
+                                                                    {[
+                                                                        "What is this project about?",
+                                                                        "How does authentication work?",
+                                                                        "What's the main tech stack?"
+                                                                    ].map((suggestion, idx) => (
+                                                                        <button
+                                                                            key={idx}
+                                                                            onClick={() => setCurrentQuestion(suggestion)}
+                                                                            className="px-4 py-2 bg-violet-50 hover:bg-violet-100 text-violet-700 rounded-xl text-sm transition-colors"
+                                                                        >
+                                                                            {suggestion}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="space-y-4">
+                                                                {chatHistory.map((msg, idx) => (
+                                                                    <div key={idx} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                                                        {msg.type === 'typing' ? (
+                                                                            <div className="bg-slate-100 rounded-2xl px-6 py-4 max-w-[80%]">
+                                                                                <div className="typing-indicator flex gap-1">
+                                                                                    <span className="w-2 h-2 bg-slate-400 rounded-full"></span>
+                                                                                    <span className="w-2 h-2 bg-slate-400 rounded-full"></span>
+                                                                                    <span className="w-2 h-2 bg-slate-400 rounded-full"></span>
+                                                                                </div>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <div className={`rounded-2xl px-6 py-4 max-w-[80%] ${msg.type === 'user'
+                                                                                ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white'
+                                                                                : msg.type === 'error'
+                                                                                    ? 'bg-red-50 text-red-700 border border-red-200'
+                                                                                    : 'bg-slate-100 text-slate-800'
+                                                                                }`}>
+                                                                                <p className="text-sm leading-relaxed">{msg.text}</p>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                ))}
+                                                                <div ref={chatEndRef} />
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="flex gap-3">
+                                                        <input
+                                                            type="text"
+                                                            value={currentQuestion}
+                                                            onChange={(e) => setCurrentQuestion(e.target.value)}
+                                                            onKeyPress={(e) => e.key === 'Enter' && handleAskQuestion()}
+                                                            placeholder="Ask a question about this repository..."
+                                                            className="flex-1 px-6 py-4 bg-slate-50 border-2 border-purple-100 rounded-2xl outline-none focus:border-violet-400 transition-all text-slate-900 placeholder-slate-500"
+                                                            disabled={isAsking}
+                                                        />
+                                                        <button
+                                                            onClick={handleAskQuestion}
+                                                            disabled={isAsking || !currentQuestion.trim()}
+                                                            className="px-6 py-4 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-2xl hover:shadow-lg hover:shadow-violet-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                                        >
+                                                            {isAsking ? <LoaderIcon /> : <SendIcon />}
+                                                            <span className="font-medium">Send</span>
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    )}
+                                        )}
 
-                                    {/* Issues Tab */}
-                                    {activeTab === 'issues' && (
-                                        <div>
-                                            <h2 className="text-3xl font-bold text-slate-800 mb-8">Issues & Risks</h2>
+                                        {/* Issues Tab */}
+                                        {activeTab === 'issues' && (
+                                            <div>
+                                                <h2 className="text-3xl font-bold text-slate-800 mb-8">Issues & Risks</h2>
 
-                                            <div className="space-y-6">
-                                                <div>
-                                                    <h3 className="text-xl font-bold text-slate-800 mb-4">Known Issues</h3>
-                                                    {analysisData.known_issues && analysisData.known_issues.length > 0 ? (
-                                                        <div className="space-y-3">
-                                                            {analysisData.known_issues.map((issue, idx) => (
-                                                                <div key={idx} className="bg-amber-50 border border-amber-200 rounded-2xl p-5 flex items-start gap-3">
-                                                                    <AlertCircleIcon />
-                                                                    <p className="text-sm text-slate-700 leading-relaxed">{issue}</p>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    ) : (
-                                                        <div className="bg-white rounded-2xl p-8 text-center border border-purple-100">
-                                                            <p className="text-slate-600">No known issues identified</p>
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                <div>
-                                                    <h3 className="text-xl font-bold text-slate-800 mb-4">Risky Areas</h3>
-                                                    {analysisData.risky_areas && analysisData.risky_areas.length > 0 ? (
-                                                        <div className="space-y-3">
-                                                            {analysisData.risky_areas.map((area, idx) => (
-                                                                <div key={idx} className="bg-red-50 border border-red-200 rounded-2xl p-5 flex items-start gap-3">
-                                                                    <XCircleIcon />
-                                                                    <p className="text-sm text-slate-700 leading-relaxed">{area}</p>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    ) : (
-                                                        <div className="bg-white rounded-2xl p-8 text-center border border-purple-100">
-                                                            <p className="text-slate-600">No risky areas identified</p>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Guide Tab */}
-                                    {activeTab === 'guide' && (
-                                        <div>
-                                            <h2 className="text-3xl font-bold text-slate-800 mb-8">Contributor Guide</h2>
-
-                                            <div className="space-y-6">
-                                                <div>
-                                                    <h3 className="text-xl font-bold text-slate-800 mb-4">Getting Started</h3>
-                                                    {analysisData.setup_steps && analysisData.setup_steps.length > 0 ? (
-                                                        <div className="bg-white rounded-2xl shadow-sm border border-purple-100 p-8">
-                                                            <div className="space-y-6">
-                                                                {analysisData.setup_steps.map((step, idx) => (
-                                                                    <div key={idx} className="flex gap-4">
-                                                                        <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-violet-600 to-purple-600 text-white rounded-xl flex items-center justify-center font-bold">
-                                                                            {idx + 1}
-                                                                        </div>
-                                                                        <div className="flex-1 pt-2">
-                                                                            <p className="text-slate-700 leading-relaxed">{step}</p>
-                                                                        </div>
+                                                <div className="space-y-6">
+                                                    <div>
+                                                        <h3 className="text-xl font-bold text-slate-800 mb-4">Known Issues</h3>
+                                                        {analysisData.known_issues && analysisData.known_issues.length > 0 ? (
+                                                            <div className="space-y-3">
+                                                                {analysisData.known_issues.map((issue, idx) => (
+                                                                    <div key={idx} className="bg-amber-50 border border-amber-200 rounded-2xl p-5 flex items-start gap-3">
+                                                                        <AlertCircleIcon />
+                                                                        <p className="text-sm text-slate-700 leading-relaxed">{issue}</p>
                                                                     </div>
                                                                 ))}
                                                             </div>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="bg-white rounded-2xl p-8 text-center border border-purple-100">
-                                                            <p className="text-slate-600">No setup steps available</p>
-                                                        </div>
-                                                    )}
-                                                </div>
+                                                        ) : (
+                                                            <div className="bg-white rounded-2xl p-8 text-center border border-purple-100">
+                                                                <p className="text-slate-600">No known issues identified</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
 
-                                                <div>
-                                                    <h3 className="text-xl font-bold text-slate-800 mb-4">Where to Contribute</h3>
-                                                    {analysisData.contribution_areas && analysisData.contribution_areas.length > 0 ? (
-                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                            {analysisData.contribution_areas.map((area, idx) => (
-                                                                <div key={idx} className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 flex items-start gap-3">
-                                                                    <CheckCircleIcon />
-                                                                    <p className="text-sm text-slate-700 leading-relaxed">{area}</p>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    ) : (
-                                                        <div className="bg-white rounded-2xl p-8 text-center border border-purple-100">
-                                                            <p className="text-slate-600">No contribution areas identified</p>
-                                                        </div>
-                                                    )}
+                                                    <div>
+                                                        <h3 className="text-xl font-bold text-slate-800 mb-4">Risky Areas</h3>
+                                                        {analysisData.risky_areas && analysisData.risky_areas.length > 0 ? (
+                                                            <div className="space-y-3">
+                                                                {analysisData.risky_areas.map((area, idx) => (
+                                                                    <div key={idx} className="bg-red-50 border border-red-200 rounded-2xl p-5 flex items-start gap-3">
+                                                                        <XCircleIcon />
+                                                                        <p className="text-sm text-slate-700 leading-relaxed">{area}</p>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <div className="bg-white rounded-2xl p-8 text-center border border-purple-100">
+                                                                <p className="text-slate-600">No risky areas identified</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    )}
-                                </>
-                            )}
+                                        )}
+
+                                        {/* Guide Tab */}
+                                        {activeTab === 'guide' && (
+                                            <div>
+                                                <h2 className="text-3xl font-bold text-slate-800 mb-8">Contributor Guide</h2>
+
+                                                <div className="space-y-6">
+                                                    <div>
+                                                        <h3 className="text-xl font-bold text-slate-800 mb-4">Getting Started</h3>
+                                                        {analysisData.setup_steps && analysisData.setup_steps.length > 0 ? (
+                                                            <div className="bg-white rounded-2xl shadow-sm border border-purple-100 p-8">
+                                                                <div className="space-y-6">
+                                                                    {analysisData.setup_steps.map((step, idx) => (
+                                                                        <div key={idx} className="flex gap-4">
+                                                                            <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-violet-600 to-purple-600 text-white rounded-xl flex items-center justify-center font-bold">
+                                                                                {idx + 1}
+                                                                            </div>
+                                                                            <div className="flex-1 pt-2">
+                                                                                <p className="text-slate-700 leading-relaxed">{step}</p>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="bg-white rounded-2xl p-8 text-center border border-purple-100">
+                                                                <p className="text-slate-600">No setup steps available</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    <div>
+                                                        <h3 className="text-xl font-bold text-slate-800 mb-4">Where to Contribute</h3>
+                                                        {analysisData.contribution_areas && analysisData.contribution_areas.length > 0 ? (
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                                {analysisData.contribution_areas.map((area, idx) => (
+                                                                    <div key={idx} className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 flex items-start gap-3">
+                                                                        <CheckCircleIcon />
+                                                                        <p className="text-sm text-slate-700 leading-relaxed">{area}</p>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <div className="bg-white rounded-2xl p-8 text-center border border-purple-100">
+                                                                <p className="text-slate-600">No contribution areas identified</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
