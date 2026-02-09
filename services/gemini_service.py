@@ -359,33 +359,56 @@ Answer:"""
                 )
                 return response.text.strip()
             except Exception as e:
+                # Log the error for debugging
+                print(f"⚠️ Gemini API error in Q&A: {str(e)}")
+                import traceback
+                traceback.print_exc()
                 # Fallback to simple response
                 return self._generate_fallback_answer(question, analysis)
         else:
+            print("⚠️ Gemini client not available, using fallback answers")
             return self._generate_fallback_answer(question, analysis)
     
     def _generate_fallback_answer(self, question: str, analysis: RepositoryAnalysis) -> str:
-        """Generate a simple answer when Gemini is unavailable."""
+        """Generate a contextual answer when Gemini is unavailable."""
         question_lower = question.lower()
         
-        if any(word in question_lower for word in ['what is', 'what does', 'about', 'overview']):
-            return f"{analysis.summary} {analysis.purpose}"
+        # Extract key information for more dynamic responses
+        tech_names = [t.name for t in analysis.tech_stack[:5]]
+        comp_names = [c.name for c in analysis.components[:4]]
         
-        elif any(word in question_lower for word in ['tech', 'technology', 'stack', 'built with', 'language']):
-            tech_list = ', '.join([t.name for t in analysis.tech_stack[:5]])
+        # More specific keyword matching with varied responses
+        if any(word in question_lower for word in ['what is', 'what does', 'explain', 'describe', 'about']):
+            if 'architecture' in question_lower or 'structure' in question_lower:
+                comp_list = ', '.join(comp_names) if comp_names else "various modules"
+                return f"This project follows a {analysis.architecture_pattern} architecture with components including {comp_list}. {analysis.data_flow}"
+            elif any(tech in question_lower for tech in ['tech', 'technology', 'stack', 'language', 'framework']):
+                tech_list = ', '.join(tech_names) if tech_names else "various technologies"
+                return f"The project is built with {tech_list}. The primary language is {analysis.primary_language}."
+            else:
+                return f"{analysis.summary} {analysis.purpose}"
+        
+        elif any(word in question_lower for word in ['how', 'setup', 'install', 'start', 'run', 'deploy']):
+            if analysis.setup_steps:
+                steps = '. '.join(analysis.setup_steps[:3])
+                return f"To get started: {steps}. Check the repository for complete setup instructions."
+            return "Setup instructions: Clone the repository and follow the README for detailed setup steps."
+        
+        elif any(word in question_lower for word in ['tech', 'technology', 'stack', 'built', 'language', 'framework', 'library']):
+            tech_list = ', '.join(tech_names) if tech_names else "various technologies"
             return f"This project uses {tech_list}. The architecture follows a {analysis.architecture_pattern} pattern."
         
-        elif any(word in question_lower for word in ['architecture', 'structure', 'organized', 'design']):
-            comp_list = ', '.join([c.name for c in analysis.components[:4]])
+        elif any(word in question_lower for word in ['architecture', 'structure', 'organized', 'design', 'pattern']):
+            comp_list = ', '.join(comp_names) if comp_names else "multiple components"
             return f"Architecture: {analysis.architecture_pattern}. Main components: {comp_list}. {analysis.data_flow}"
         
-        elif any(word in question_lower for word in ['contribute', 'help', 'start', 'setup', 'install']):
-            if analysis.setup_steps:
-                steps = '; '.join(analysis.setup_steps[:4])
-                return f"To get started: {steps}"
-            return "Setup instructions are not detailed in the analysis. Check the repository README."
+        elif any(word in question_lower for word in ['contribute', 'help', 'where', 'area']):
+            if analysis.contribution_areas:
+                areas = ', '.join(analysis.contribution_areas[:3])
+                return f"You can contribute in these areas: {areas}."
+            return "Check the repository issues and README for contribution guidelines."
         
-        elif any(word in question_lower for word in ['issue', 'problem', 'bug', 'risk']):
+        elif any(word in question_lower for word in ['issue', 'problem', 'bug', 'risk', 'concern']):
             issues = analysis.known_issues[:3] if analysis.known_issues else []
             risks = analysis.risky_areas[:2] if analysis.risky_areas else []
             
@@ -398,6 +421,21 @@ Answer:"""
                 return ". ".join(result) + "."
             return "No specific issues or risks identified in the analysis."
         
+        elif any(word in question_lower for word in ['file', 'code', 'source', 'important']):
+            if analysis.key_files:
+                files = ', '.join([f.path for f in analysis.key_files[:3]])
+                return f"Key files in this project include: {files}. These files are central to the project's functionality."
+            return "File structure information is available in the repository."
+        
+        elif any(word in question_lower for word in ['data', 'flow', 'work', 'process']):
+            return f"Data flow: {analysis.data_flow}. The system follows a {analysis.architecture_pattern} pattern."
+        
+        elif any(word in question_lower for word in ['component', 'module', 'part']):
+            if comp_names:
+                return f"Main components: {', '.join(comp_names)}. Each component serves a specific purpose in the {analysis.architecture_pattern} architecture."
+            return f"The project is organized following a {analysis.architecture_pattern} architecture pattern."
+        
         else:
-            # Default: provide overview
-            return f"{analysis.summary} It uses {', '.join([t.name for t in analysis.tech_stack[:3]])} with a {analysis.architecture_pattern} architecture."
+            # More varied default response based on available data
+            tech_summary = f" using {', '.join(tech_names[:3])}" if tech_names else ""
+            return f"{analysis.summary}{tech_summary}. It follows a {analysis.architecture_pattern} architecture. {analysis.purpose}"
