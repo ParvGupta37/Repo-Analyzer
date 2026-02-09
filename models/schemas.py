@@ -11,9 +11,10 @@ from db.database import Base
 # CORE TABLES (always used)
 # ============================================================================
 
+
 class Repository(Base):
     __tablename__ = "repositories"
-    
+
     id = Column(Text, primary_key=True)
     repo_url = Column(Text, unique=True, nullable=False, index=True)
     owner = Column(Text, nullable=False)
@@ -25,7 +26,7 @@ class Repository(Base):
 
 class AnalysisSession(Base):
     __tablename__ = "analysis_sessions"
-    
+
     id = Column(Text, primary_key=True)
     repo_id = Column(Text, ForeignKey("repositories.id"), nullable=False, index=True)
     status = Column(Text, nullable=False, index=True)  # processing|completed|failed
@@ -33,25 +34,27 @@ class AnalysisSession(Base):
     completed_at = Column(DateTime)
     error_message = Column(Text)
     gemini_call_count = Column(Integer, default=0)  # Track API calls made
-    
+
 
 # ============================================================================
 # ANALYSIS DATA TABLES (split architecture for normalized storage)
 # ============================================================================
 
+
 class AnalysisSummary(Base):
     """Core summary and metadata for quick access."""
+
     __tablename__ = "analysis_summary"
-    
+
     repo_id = Column(Text, ForeignKey("repositories.id"), primary_key=True)
-    
+
     # Core fields
     summary = Column(Text, nullable=False)
     purpose = Column(Text, nullable=False)
     architecture_pattern = Column(Text, nullable=False)
     data_flow = Column(Text, nullable=False)
     confidence_score = Column(Float, default=0.8)
-    
+
     # Metadata
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -60,8 +63,9 @@ class AnalysisSummary(Base):
 
 class TechStack(Base):
     """Individual technology items (many per repository)."""
+
     __tablename__ = "tech_stack"
-    
+
     id = Column(Text, primary_key=True)
     repo_id = Column(Text, ForeignKey("repositories.id"), nullable=False, index=True)
     name = Column(Text, nullable=False)
@@ -72,8 +76,9 @@ class TechStack(Base):
 
 class ArchitectureComponent(Base):
     """Individual architectural components."""
+
     __tablename__ = "architecture_components"
-    
+
     id = Column(Text, primary_key=True)
     repo_id = Column(Text, ForeignKey("repositories.id"), nullable=False, index=True)
     name = Column(Text, nullable=False)
@@ -83,8 +88,9 @@ class ArchitectureComponent(Base):
 
 class KeyFile(Base):
     """Key files identified in the repository."""
+
     __tablename__ = "key_files"
-    
+
     id = Column(Text, primary_key=True)
     repo_id = Column(Text, ForeignKey("repositories.id"), nullable=False, index=True)
     file_path = Column(Text, nullable=False)
@@ -94,8 +100,9 @@ class KeyFile(Base):
 
 class SetupStep(Base):
     """Setup instructions in order."""
+
     __tablename__ = "setup_steps"
-    
+
     id = Column(Text, primary_key=True)
     repo_id = Column(Text, ForeignKey("repositories.id"), nullable=False, index=True)
     step_order = Column(Integer, nullable=False)
@@ -104,8 +111,9 @@ class SetupStep(Base):
 
 class ContributionArea(Base):
     """Safe areas for new contributors."""
+
     __tablename__ = "contribution_areas"
-    
+
     id = Column(Text, primary_key=True)
     repo_id = Column(Text, ForeignKey("repositories.id"), nullable=False, index=True)
     area = Column(Text, nullable=False)
@@ -113,8 +121,9 @@ class ContributionArea(Base):
 
 class RiskyArea(Base):
     """Areas requiring caution."""
+
     __tablename__ = "risky_areas"
-    
+
     id = Column(Text, primary_key=True)
     repo_id = Column(Text, ForeignKey("repositories.id"), nullable=False, index=True)
     area = Column(Text, nullable=False)
@@ -122,8 +131,9 @@ class RiskyArea(Base):
 
 class KnownIssue(Base):
     """Known issues from GitHub analysis."""
+
     __tablename__ = "known_issues"
-    
+
     id = Column(Text, primary_key=True)
     repo_id = Column(Text, ForeignKey("repositories.id"), nullable=False, index=True)
     issue = Column(Text, nullable=False)
@@ -133,9 +143,10 @@ class KnownIssue(Base):
 # Q&A LOGS (unchanged)
 # ============================================================================
 
+
 class QALog(Base):
     __tablename__ = "qa_logs"
-    
+
     id = Column(Text, primary_key=True)
     repo_id = Column(Text, ForeignKey("repositories.id"), nullable=False, index=True)
     question = Column(Text, nullable=False)
@@ -147,10 +158,12 @@ class QALog(Base):
 # RAW RESPONSE STORAGE (for debugging and versioning)
 # ============================================================================
 
+
 class RawAnalysisResponse(Base):
     """Store raw Gemini response for debugging/auditing."""
+
     __tablename__ = "raw_analysis_responses"
-    
+
     repo_id = Column(Text, ForeignKey("repositories.id"), primary_key=True)
     raw_json = Column(Text, nullable=False)  # Complete Pydantic model as JSON
     prompt_used = Column(Text)  # Store prompt for reproducibility

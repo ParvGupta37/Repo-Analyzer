@@ -27,21 +27,23 @@ def event_loop():
 async def test_db() -> AsyncGenerator[AsyncSession, None]:
     """Create test database session."""
     engine = create_async_engine(TEST_DATABASE_URL, echo=False)
-    
+
     # Create tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    
+
     # Create session
-    async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    
+    async_session = async_sessionmaker(
+        engine, class_=AsyncSession, expire_on_commit=False
+    )
+
     async with async_session() as session:
         yield session
-    
+
     # Cleanup
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
-    
+
     await engine.dispose()
 
 
@@ -65,7 +67,7 @@ def mock_github_response():
         "stargazers_count": 100,
         "forks_count": 50,
         "created_at": "2024-01-01T00:00:00Z",
-        "updated_at": "2024-01-15T00:00:00Z"
+        "updated_at": "2024-01-15T00:00:00Z",
     }
 
 
@@ -75,14 +77,10 @@ def mock_gemini_analysis():
     return {
         "summary": "Test repository for testing purposes",
         "purpose": "Testing",
-        "tech_stack": [
-            {"name": "Python", "category": "language", "version": "3.9+"}
-        ],
+        "tech_stack": [{"name": "Python", "category": "language", "version": "3.9+"}],
         "primary_language": "Python",
         "architecture_pattern": "MVC",
-        "components": [
-            {"name": "API", "purpose": "REST API", "files": ["main.py"]}
-        ],
+        "components": [{"name": "API", "purpose": "REST API", "files": ["main.py"]}],
         "data_flow": "Request -> Handler -> Response",
         "key_files": [
             {"path": "main.py", "role": "entry_point", "purpose": "Application entry"}
@@ -91,5 +89,5 @@ def mock_gemini_analysis():
         "contribution_areas": ["Documentation", "Tests"],
         "risky_areas": ["Database migrations"],
         "known_issues": ["None"],
-        "confidence_score": 0.9
+        "confidence_score": 0.9,
     }

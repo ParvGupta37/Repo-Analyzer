@@ -12,7 +12,7 @@ import os
 # Initialize rate limiter
 limiter = Limiter(
     key_func=get_remote_address,
-    default_limits=[f"{os.getenv('RATE_LIMIT_PER_MINUTE', '10')}/minute"]
+    default_limits=[f"{os.getenv('RATE_LIMIT_PER_MINUTE', '10')}/minute"],
 )
 
 

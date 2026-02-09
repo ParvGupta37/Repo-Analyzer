@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, validator
 # Try to import Google GenAI SDK
 try:
     from google import genai
+
     GEMINI_AVAILABLE = True
 except ImportError:
     GEMINI_AVAILABLE = False
@@ -19,15 +20,22 @@ except ImportError:
 # STRUCTURED OUTPUT SCHEMA - Enforces deterministic, frontend-ready responses
 # ============================================================================
 
+
 class TechStackItem(BaseModel):
     """Single technology in the stack."""
+
     name: str = Field(..., max_length=50, description="Technology name")
-    category: str = Field(..., max_length=30, description="Category (Language/Framework/Database/Tool)")
-    version: Optional[str] = Field(None, max_length=20, description="Version if detected")
+    category: str = Field(
+        ..., max_length=30, description="Category (Language/Framework/Database/Tool)"
+    )
+    version: Optional[str] = Field(
+        None, max_length=20, description="Version if detected"
+    )
 
 
 class ComponentItem(BaseModel):
     """Single architectural component."""
+
     name: str = Field(..., max_length=50, description="Component name")
     purpose: str = Field(..., max_length=200, description="What this component does")
     files: List[str] = Field(default_factory=list, max_items=5, description="Key files")
@@ -35,6 +43,7 @@ class ComponentItem(BaseModel):
 
 class FileInsight(BaseModel):
     """Insight about a specific file."""
+
     path: str = Field(..., max_length=200)
     role: str = Field(..., max_length=30, description="entry_point/config/core/utility")
     purpose: str = Field(..., max_length=150, description="One-line explanation")
@@ -42,35 +51,54 @@ class FileInsight(BaseModel):
 
 class RepositoryAnalysis(BaseModel):
     """Complete repository analysis - single structured response."""
-    
+
     # Core summary (comprehensive overview)
-    summary: str = Field(..., min_length=200, max_length=1500, description="10-20 sentence comprehensive project summary")
+    summary: str = Field(
+        ...,
+        min_length=200,
+        max_length=1500,
+        description="10-20 sentence comprehensive project summary",
+    )
     purpose: str = Field(..., max_length=150, description="What problem this solves")
-    
+
     # Tech stack
     tech_stack: List[TechStackItem] = Field(..., min_items=1, max_items=15)
     primary_language: str = Field(..., max_length=30)
-    
+
     # Architecture
-    architecture_pattern: str = Field(..., max_length=50, description="MVC/Microservices/Monolith/etc")
+    architecture_pattern: str = Field(
+        ..., max_length=50, description="MVC/Microservices/Monolith/etc"
+    )
     components: List[ComponentItem] = Field(default_factory=list, max_items=10)
-    data_flow: str = Field(..., max_length=300, description="How data moves through the system")
-    
+    data_flow: str = Field(
+        ..., max_length=300, description="How data moves through the system"
+    )
+
     # File organization
     key_files: List[FileInsight] = Field(default_factory=list, max_items=10)
-    
+
     # Setup and contribution
-    setup_steps: List[str] = Field(..., min_items=2, max_items=6, description="Setup steps as short strings")
-    contribution_areas: List[str] = Field(default_factory=list, max_items=5, description="Safe areas for new contributors")
-    
+    setup_steps: List[str] = Field(
+        ..., min_items=2, max_items=6, description="Setup steps as short strings"
+    )
+    contribution_areas: List[str] = Field(
+        default_factory=list, max_items=5, description="Safe areas for new contributors"
+    )
+
     # Risks and limitations
-    risky_areas: List[str] = Field(default_factory=list, max_items=5, description="Areas requiring caution")
-    known_issues: List[str] = Field(default_factory=list, max_items=5, description="From GitHub issues analysis")
-    
+    risky_areas: List[str] = Field(
+        default_factory=list, max_items=5, description="Areas requiring caution"
+    )
+    known_issues: List[str] = Field(
+        default_factory=list, max_items=5, description="From GitHub issues analysis"
+    )
+
     # Metadata
-    confidence_score: float = Field(default=0.8, ge=0.0, le=1.0, description="Analysis confidence")
-    
-    @validator('summary', 'purpose', 'data_flow')
+    confidence_score: float = Field(
+        default=0.8, ge=0.0, le=1.0, description="Analysis confidence"
+    )
+
+    @validator("summary", "purpose", "data_flow")
     def no_fluff(cls, v):
         """Remove common AI fluff phrases."""
         fluff_phrases = [
@@ -80,7 +108,7 @@ class RepositoryAnalysis(BaseModel):
             "basically",
             "essentially",
             "in conclusion",
-            "to summarize"
+            "to summarize",
         ]
         result = v
         for phrase in fluff_phrases:
@@ -92,38 +120,42 @@ class RepositoryAnalysis(BaseModel):
 # GEMINI SERVICE - Single call, validated output
 # ============================================================================
 
+
 class GeminiServiceV2:
     """Refactored Gemini service - ONE call per repository analysis."""
-    
+
     def __init__(self):
         self.api_key = os.getenv("GEMINI_API_KEY")
         self.client = None
         self.model_name = None
         self.using_mock = False
-        
+
         gemini_model = os.getenv("GEMINI_MODEL", "flash")
-        
+
         if GEMINI_AVAILABLE and self.api_key:
             self.client = genai.Client(api_key=self.api_key)
-            self.model_name = 'gemini-3-pro-preview' if gemini_model.lower() == "pro" else 'gemini-3-flash-preview'
+            self.model_name = (
+                "gemini-3-pro-preview"
+                if gemini_model.lower() == "pro"
+                else "gemini-3-flash-preview"
+            )
         else:
             self.using_mock = True
-    
+
     async def analyze_repository(self, context: Dict) -> RepositoryAnalysis:
         """
         SINGLE API CALL to analyze entire repository.
         Returns validated, structured, frontend-ready data.
         """
         prompt = self._build_unified_prompt(context)
-        
+
         if self.client and self.model_name:
             try:
                 response = self.client.models.generate_content(
-                    model=self.model_name,
-                    contents=prompt
+                    model=self.model_name, contents=prompt
                 )
                 raw_text = response.text
-                
+
                 # Clean response (remove markdown fences if present)
                 if raw_text.strip().startswith("```"):
                     raw_text = raw_text.split("```json")[-1].split("```")[0].strip()
@@ -132,15 +164,16 @@ class GeminiServiceV2:
                 else:
                     # Try to extract JSON from text
                     import re
-                    json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
+
+                    json_match = re.search(r"\{.*\}", raw_text, re.DOTALL)
                     if json_match:
                         raw_text = json_match.group(0)
-                
+
                 # Parse and validate
                 data = json.loads(raw_text)
                 analysis = RepositoryAnalysis(**data)
                 return analysis
-                
+
             except json.JSONDecodeError as e:
                 print(f"Gemini returned invalid JSON: {str(e)}")
                 return self._fallback_analysis(context)
@@ -149,30 +182,39 @@ class GeminiServiceV2:
                 return self._fallback_analysis(context)
         else:
             return self._fallback_analysis(context)
-    
+
     def _build_unified_prompt(self, context: Dict) -> str:
         """Build single comprehensive prompt for all analysis."""
-        
-        repo_name = context.get('repo_name', 'Unknown')
-        primary_lang = context.get('primary_language', 'Unknown')
-        readme = (context.get('readme') or 'No README available')[:3000]
-        
-        files_list = "\n".join([
-            f"- {f['path']} ({f.get('language', 'unknown')})"
-            for f in context.get('files', [])[:20]
-        ])
-        
-        config_files = [f['path'] for f in context.get('config_files', [])[:10]]
-        entry_files = [f['path'] for f in context.get('source_files', []) if f.get('role') == 'entry_point'][:5]
-        
+
+        repo_name = context.get("repo_name", "Unknown")
+        primary_lang = context.get("primary_language", "Unknown")
+        readme = (context.get("readme") or "No README available")[:3000]
+
+        files_list = "\n".join(
+            [
+                f"- {f['path']} ({f.get('language', 'unknown')})"
+                for f in context.get("files", [])[:20]
+            ]
+        )
+
+        config_files = [f["path"] for f in context.get("config_files", [])[:10]]
+        entry_files = [
+            f["path"]
+            for f in context.get("source_files", [])
+            if f.get("role") == "entry_point"
+        ][:5]
+
         issues_summary = f"{len(context.get('open_issues', []))} open, {len(context.get('closed_issues', []))} recently closed"
-        
+
         # Extract issue titles for pattern detection
         issue_titles = [
-            issue.get('title', '')
-            for issue in (context.get('open_issues', [])[:10] + context.get('closed_issues', [])[:5])
+            issue.get("title", "")
+            for issue in (
+                context.get("open_issues", [])[:10]
+                + context.get("closed_issues", [])[:5]
+            )
         ]
-        
+
         prompt = f"""Analyze this GitHub repository and return ONLY valid JSON (no markdown, no prose).
 
 Repository: {repo_name}
@@ -251,20 +293,18 @@ Return JSON with these exact keys:
 Analyze based on README and file structure. Use evidence only. Be concise. Return valid JSON only.
 """
         return prompt
-    
+
     def _fallback_analysis(self, context: Dict) -> RepositoryAnalysis:
         """Deterministic fallback when Gemini unavailable."""
-        primary_lang = context.get('primary_language') or 'Unknown'
-        repo_name = context.get('repo_name') or 'Unknown Repository'
-        
+        primary_lang = context.get("primary_language") or "Unknown"
+        repo_name = context.get("repo_name") or "Unknown Repository"
+
         return RepositoryAnalysis(
             summary=f"{repo_name} is a {primary_lang} project. Analysis limited due to API constraints.",
             purpose="Project analysis unavailable",
             tech_stack=[
                 TechStackItem(
-                    name=primary_lang,
-                    category="Programming Language",
-                    version=None
+                    name=primary_lang, category="Programming Language", version=None
                 )
             ],
             primary_language=primary_lang,
@@ -272,37 +312,36 @@ Analyze based on README and file structure. Use evidence only. Be concise. Retur
             components=[],
             data_flow="Analysis unavailable",
             key_files=[],
-            setup_steps=[
-                "Clone repository",
-                "Review README for setup instructions"
-            ],
+            setup_steps=["Clone repository", "Review README for setup instructions"],
             contribution_areas=["Documentation"],
             risky_areas=[],
             known_issues=[],
-            confidence_score=0.3
+            confidence_score=0.3,
         )
-    
-    async def answer_question(self, question: str, analysis: RepositoryAnalysis, additional_context: str = "") -> str:
+
+    async def answer_question(
+        self, question: str, analysis: RepositoryAnalysis, additional_context: str = ""
+    ) -> str:
         """
         Answer question using pre-analyzed data.
         This is a SEPARATE call (for Q&A), not part of initial analysis.
         """
         # Build rich context from analysis
-        tech_details = "\n".join([
-            f"- {t.name} ({t.category})" + (f" v{t.version}" if t.version else "")
-            for t in analysis.tech_stack[:8]
-        ])
-        
-        comp_details = "\n".join([
-            f"- {c.name}: {c.purpose}"
-            for c in analysis.components[:5]
-        ])
-        
-        setup_details = "\n".join([
-            f"{i+1}. {step}"
-            for i, step in enumerate(analysis.setup_steps[:5])
-        ])
-        
+        tech_details = "\n".join(
+            [
+                f"- {t.name} ({t.category})" + (f" v{t.version}" if t.version else "")
+                for t in analysis.tech_stack[:8]
+            ]
+        )
+
+        comp_details = "\n".join(
+            [f"- {c.name}: {c.purpose}" for c in analysis.components[:5]]
+        )
+
+        setup_details = "\n".join(
+            [f"{i+1}. {step}" for i, step in enumerate(analysis.setup_steps[:5])]
+        )
+
         context_str = f"""Repository Analysis:
 
 OVERVIEW:
@@ -332,7 +371,7 @@ KNOWN ISSUES:
 
 {additional_context}
 """
-        
+
         prompt = f"""Answer this question about the repository using ONLY the provided analysis data.
 
 Question: {question}
@@ -350,68 +389,100 @@ CRITICAL RULES:
 7. Focus on what's relevant to the question
 
 Answer:"""
-        
+
         if self.client and self.model_name:
             try:
                 response = self.client.models.generate_content(
-                    model=self.model_name,
-                    contents=prompt
+                    model=self.model_name, contents=prompt
                 )
                 return response.text.strip()
             except Exception as e:
                 # Log the error for debugging
                 print(f"⚠️ Gemini API error in Q&A: {str(e)}")
                 import traceback
+
                 traceback.print_exc()
                 # Fallback to simple response
                 return self._generate_fallback_answer(question, analysis)
         else:
             print("⚠️ Gemini client not available, using fallback answers")
             return self._generate_fallback_answer(question, analysis)
-    
-    def _generate_fallback_answer(self, question: str, analysis: RepositoryAnalysis) -> str:
+
+    def _generate_fallback_answer(
+        self, question: str, analysis: RepositoryAnalysis
+    ) -> str:
         """Generate a contextual answer when Gemini is unavailable."""
         question_lower = question.lower()
-        
+
         # Extract key information for more dynamic responses
         tech_names = [t.name for t in analysis.tech_stack[:5]]
         comp_names = [c.name for c in analysis.components[:4]]
-        
+
         # More specific keyword matching with varied responses
-        if any(word in question_lower for word in ['what is', 'what does', 'explain', 'describe', 'about']):
-            if 'architecture' in question_lower or 'structure' in question_lower:
-                comp_list = ', '.join(comp_names) if comp_names else "various modules"
+        if any(
+            word in question_lower
+            for word in ["what is", "what does", "explain", "describe", "about"]
+        ):
+            if "architecture" in question_lower or "structure" in question_lower:
+                comp_list = ", ".join(comp_names) if comp_names else "various modules"
                 return f"This project follows a {analysis.architecture_pattern} architecture with components including {comp_list}. {analysis.data_flow}"
-            elif any(tech in question_lower for tech in ['tech', 'technology', 'stack', 'language', 'framework']):
-                tech_list = ', '.join(tech_names) if tech_names else "various technologies"
+            elif any(
+                tech in question_lower
+                for tech in ["tech", "technology", "stack", "language", "framework"]
+            ):
+                tech_list = (
+                    ", ".join(tech_names) if tech_names else "various technologies"
+                )
                 return f"The project is built with {tech_list}. The primary language is {analysis.primary_language}."
             else:
                 return f"{analysis.summary} {analysis.purpose}"
-        
-        elif any(word in question_lower for word in ['how', 'setup', 'install', 'start', 'run', 'deploy']):
+
+        elif any(
+            word in question_lower
+            for word in ["how", "setup", "install", "start", "run", "deploy"]
+        ):
             if analysis.setup_steps:
-                steps = '. '.join(analysis.setup_steps[:3])
+                steps = ". ".join(analysis.setup_steps[:3])
                 return f"To get started: {steps}. Check the repository for complete setup instructions."
             return "Setup instructions: Clone the repository and follow the README for detailed setup steps."
-        
-        elif any(word in question_lower for word in ['tech', 'technology', 'stack', 'built', 'language', 'framework', 'library']):
-            tech_list = ', '.join(tech_names) if tech_names else "various technologies"
+
+        elif any(
+            word in question_lower
+            for word in [
+                "tech",
+                "technology",
+                "stack",
+                "built",
+                "language",
+                "framework",
+                "library",
+            ]
+        ):
+            tech_list = ", ".join(tech_names) if tech_names else "various technologies"
             return f"This project uses {tech_list}. The architecture follows a {analysis.architecture_pattern} pattern."
-        
-        elif any(word in question_lower for word in ['architecture', 'structure', 'organized', 'design', 'pattern']):
-            comp_list = ', '.join(comp_names) if comp_names else "multiple components"
+
+        elif any(
+            word in question_lower
+            for word in ["architecture", "structure", "organized", "design", "pattern"]
+        ):
+            comp_list = ", ".join(comp_names) if comp_names else "multiple components"
             return f"Architecture: {analysis.architecture_pattern}. Main components: {comp_list}. {analysis.data_flow}"
-        
-        elif any(word in question_lower for word in ['contribute', 'help', 'where', 'area']):
+
+        elif any(
+            word in question_lower for word in ["contribute", "help", "where", "area"]
+        ):
             if analysis.contribution_areas:
-                areas = ', '.join(analysis.contribution_areas[:3])
+                areas = ", ".join(analysis.contribution_areas[:3])
                 return f"You can contribute in these areas: {areas}."
             return "Check the repository issues and README for contribution guidelines."
-        
-        elif any(word in question_lower for word in ['issue', 'problem', 'bug', 'risk', 'concern']):
+
+        elif any(
+            word in question_lower
+            for word in ["issue", "problem", "bug", "risk", "concern"]
+        ):
             issues = analysis.known_issues[:3] if analysis.known_issues else []
             risks = analysis.risky_areas[:2] if analysis.risky_areas else []
-            
+
             if issues or risks:
                 result = []
                 if issues:
@@ -420,21 +491,25 @@ Answer:"""
                     result.append(f"Risky areas: {', '.join(risks)}")
                 return ". ".join(result) + "."
             return "No specific issues or risks identified in the analysis."
-        
-        elif any(word in question_lower for word in ['file', 'code', 'source', 'important']):
+
+        elif any(
+            word in question_lower for word in ["file", "code", "source", "important"]
+        ):
             if analysis.key_files:
-                files = ', '.join([f.path for f in analysis.key_files[:3]])
+                files = ", ".join([f.path for f in analysis.key_files[:3]])
                 return f"Key files in this project include: {files}. These files are central to the project's functionality."
             return "File structure information is available in the repository."
-        
-        elif any(word in question_lower for word in ['data', 'flow', 'work', 'process']):
+
+        elif any(
+            word in question_lower for word in ["data", "flow", "work", "process"]
+        ):
             return f"Data flow: {analysis.data_flow}. The system follows a {analysis.architecture_pattern} pattern."
-        
-        elif any(word in question_lower for word in ['component', 'module', 'part']):
+
+        elif any(word in question_lower for word in ["component", "module", "part"]):
             if comp_names:
                 return f"Main components: {', '.join(comp_names)}. Each component serves a specific purpose in the {analysis.architecture_pattern} architecture."
             return f"The project is organized following a {analysis.architecture_pattern} architecture pattern."
-        
+
         else:
             # More varied default response based on available data
             tech_summary = f" using {', '.join(tech_names[:3])}" if tech_names else ""

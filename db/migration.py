@@ -14,17 +14,21 @@ async def migrate_to_v2():
     async with engine.begin() as conn:
         # Enable foreign keys
         await conn.exec_driver_sql("PRAGMA foreign_keys = ON;")
-        
+
         # Check if new table exists
-        result = await conn.execute(text(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='analysis_results';"
-        ))
+        result = await conn.execute(
+            text(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='analysis_results';"
+            )
+        )
         exists = result.scalar() is not None
-        
+
         if not exists:
             print("Creating analysis_results table...")
-            
-            await conn.execute(text("""
+
+            await conn.execute(
+                text(
+                    """
                 CREATE TABLE analysis_results (
                     repo_id TEXT PRIMARY KEY,
                     summary TEXT NOT NULL,
@@ -46,34 +50,40 @@ async def migrate_to_v2():
                     analysis_version TEXT DEFAULT '2.0',
                     FOREIGN KEY (repo_id) REFERENCES repositories(id)
                 );
-            """))
-            
+            """
+                )
+            )
+
             print("✓ analysis_results table created")
         else:
             print("✓ analysis_results table already exists")
-        
+
         # Create index for faster queries
-        await conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS idx_analysis_confidence ON analysis_results(confidence_score);"
-        ))
-        await conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS idx_analysis_language ON analysis_results(primary_language);"
-        ))
-        
+        await conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_analysis_confidence ON analysis_results(confidence_score);"
+            )
+        )
+        await conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_analysis_language ON analysis_results(primary_language);"
+            )
+        )
+
         print("✓ Migration complete")
 
 
 async def check_schema_version():
     """Check which schema version is in use."""
     async with engine.begin() as conn:
-        result = await conn.execute(text(
-            "SELECT name FROM sqlite_master WHERE type='table';"
-        ))
+        result = await conn.execute(
+            text("SELECT name FROM sqlite_master WHERE type='table';")
+        )
         tables = [row[0] for row in result.fetchall()]
-        
-        has_v2 = 'analysis_results' in tables
-        has_v1 = 'tech_stack' in tables and 'architecture_summary' in tables
-        
+
+        has_v2 = "analysis_results" in tables
+        has_v1 = "tech_stack" in tables and "architecture_summary" in tables
+
         if has_v2:
             print("✓ Schema V2 detected (unified analysis_results)")
             return "v2"

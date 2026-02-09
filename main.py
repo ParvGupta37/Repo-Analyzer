@@ -36,15 +36,15 @@ async def lifespan(app: FastAPI):
     print("=" * 80)
     print("🚀 GitHub Repository Analyzer - Production")
     print("=" * 80)
-    
+
     print("\n📊 Initializing database...")
     await init_db()
     print("✅ Database initialized successfully")
-    
+
     # Print configuration
     api_key = os.getenv("GEMINI_API_KEY")
     model = os.getenv("GEMINI_MODEL", "flash")
-    
+
     print("\n🤖 AI Configuration:")
     if api_key:
         model_name = "Gemini 3 Pro" if model.lower() == "pro" else "Gemini 3 Flash"
@@ -53,7 +53,7 @@ async def lifespan(app: FastAPI):
     else:
         print("  ⚠️  No GEMINI_API_KEY - using mock mode")
         print("  💡 Set GEMINI_API_KEY in .env for AI analysis")
-    
+
     print("\n⚡ Architecture:")
     print("  ✅ Status-based async flow (Option A)")
     print("  ✅ Split table storage (normalized)")
@@ -61,20 +61,20 @@ async def lifespan(app: FastAPI):
     print("  ✅ Zero Gemini calls in /api/ask")
     print("  ✅ Proper SQLite persistence")
     print("  ✅ Idempotent Q&A operations")
-    
+
     print("\n🌐 Endpoints:")
     print("  POST   /api/analyze-repo     - Start analysis")
     print("  GET    /api/status/{id}      - Check status")
     print("  GET    /api/analysis/{id}    - Get results")
     print("  POST   /api/ask              - Ask questions")
     print("  GET    /api/health           - Health check")
-    
+
     print("\n" + "=" * 80)
     print("✅ Application started successfully")
     print("=" * 80 + "\n")
-    
+
     yield
-    
+
     # Shutdown
     print("\n👋 Application shutting down...")
 
@@ -84,20 +84,22 @@ app = FastAPI(
     title="GitHub Repository Analyzer - Production",
     description="Hardened system with proper async flow and guaranteed persistence",
     version="3.0.0-final",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 # Add rate limiter
 limiter = get_limiter()
 app.state.limiter = limiter
 
+
 # Add rate limit exception handler
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
     return JSONResponse(
         status_code=429,
-        content={"detail": "Rate limit exceeded. Please try again later."}
+        content={"detail": "Rate limit exceeded. Please try again later."},
     )
+
 
 # Add CORS middleware
 app.add_middleware(
@@ -113,6 +115,7 @@ app.include_router(router, prefix="/api", tags=["analysis"])
 
 # Include WebSocket routes
 from routes.websocket import router as ws_router
+
 app.include_router(ws_router, tags=["websocket"])
 
 
@@ -126,36 +129,27 @@ async def root():
         "architecture": {
             "async_flow": "status-based (Option A)",
             "storage": "split tables (normalized)",
-            "gemini_calls": {
-                "per_repository": 1,
-                "per_question": 0
-            },
-            "persistence": "guaranteed (proper session management)"
+            "gemini_calls": {"per_repository": 1, "per_question": 0},
+            "persistence": "guaranteed (proper session management)",
         },
         "endpoints": {
             "analyze": "POST /api/analyze-repo",
             "status": "GET /api/status/{repo_id}",
             "results": "GET /api/analysis/{repo_id}",
             "ask": "POST /api/ask",
-            "health": "GET /api/health"
+            "health": "GET /api/health",
         },
         "guarantees": [
             "Exactly 1 Gemini call per repository",
             "Zero Gemini calls for questions",
             "Data persists across restarts",
             "Idempotent operations",
-            "Proper error handling"
-        ]
+            "Proper error handling",
+        ],
     }
 
 
 if __name__ == "__main__":
     import uvicorn
-    
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
-    )
+
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, log_level="info")

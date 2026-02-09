@@ -12,16 +12,12 @@ DATABASE_URL = "sqlite+aiosqlite:///./app.db"
 
 # Create async engine
 engine = create_async_engine(
-    DATABASE_URL,
-    echo=False,
-    connect_args={"check_same_thread": False}
+    DATABASE_URL, echo=False, connect_args={"check_same_thread": False}
 )
 
 # Create async session factory
 async_session_maker = async_sessionmaker(
-    engine,
-    class_=AsyncSession,
-    expire_on_commit=False
+    engine, class_=AsyncSession, expire_on_commit=False
 )
 
 Base = declarative_base()
