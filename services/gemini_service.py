@@ -258,7 +258,7 @@ Analyze based on README and file structure. Use evidence only. Be concise. Retur
         repo_name = context.get('repo_name') or 'Unknown Repository'
         
         return RepositoryAnalysis(
-            summary=f"{repo_name} is a {primary_lang} project. Analysis limited due to API constraints.",
+            summary=f"{repo_name} is a {primary_lang} project currently experiencing API analysis limitations. This repository contains code, documentation, and configuration files typical of modern software development. Due to temporary API constraints, automated deep analysis is unavailable at this moment. However, basic project structure and primary technology stack have been identified. Please try again later for comprehensive analysis.",
             purpose="Project analysis unavailable",
             tech_stack=[
                 TechStackItem(

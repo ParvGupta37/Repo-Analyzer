@@ -13,7 +13,7 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from dotenv import load_dotenv
 from slowapi.errors import RateLimitExceeded
 
@@ -115,47 +115,41 @@ app.include_router(router, prefix="/api", tags=["analysis"])
 from routes.websocket import router as ws_router
 app.include_router(ws_router, tags=["websocket"])
 
-
+# Serve index.html at root and for SPA routing (all non-API routes)
 @app.get("/")
-async def root():
-    """Root endpoint with system information."""
-    return {
-        "service": "GitHub Repository Analyzer",
-        "version": "3.0.0-final",
-        "status": "production",
-        "architecture": {
-            "async_flow": "status-based (Option A)",
-            "storage": "split tables (normalized)",
-            "gemini_calls": {
-                "per_repository": 1,
-                "per_question": 0
-            },
-            "persistence": "guaranteed (proper session management)"
-        },
-        "endpoints": {
-            "analyze": "POST /api/analyze-repo",
-            "status": "GET /api/status/{repo_id}",
-            "results": "GET /api/analysis/{repo_id}",
-            "ask": "POST /api/ask",
-            "health": "GET /api/health"
-        },
-        "guarantees": [
-            "Exactly 1 Gemini call per repository",
-            "Zero Gemini calls for questions",
-            "Data persists across restarts",
-            "Idempotent operations",
-            "Proper error handling"
-        ]
-    }
+async def serve_root():
+    """Serve index.html at root."""
+    import os
+    index_path = os.path.join(os.path.dirname(__file__), "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path, media_type="text/html")
+    return {"error": "index.html not found"}
+
+
+@app.get("/{path:path}")
+async def serve_spa(path: str):
+    """Serve index.html for SPA routing (catch-all for non-API, non-static routes)."""
+    # Skip if it looks like an API call or static asset with extension
+    if path.startswith("api") or "." in path.split("/")[-1]:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    
+    import os
+    index_path = os.path.join(os.path.dirname(__file__), "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path, media_type="text/html")
+    return JSONResponse({"error": "index.html not found"}, status_code=404)
 
 
 if __name__ == "__main__":
     import uvicorn
     
+    # Use PORT from environment (Railway/Heroku) or default to 8000 for local dev
+    port = int(os.getenv("PORT", 8000))
+    
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=8000,
+        port=port,
         reload=True,
         log_level="info"
     )
