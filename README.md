@@ -15,7 +15,7 @@ A complete backend system that analyzes GitHub repositories to help new develope
 - **Intelligent File Filtering**: Focuses on important files (entry points, configs, core modules)
 - **Context-Aware Q&A**: Answer questions about the repository using analyzed context
 
-### Advanced Features (NEW)
+### Advanced Features 
 - **Real-time Progress**: WebSocket support for live analysis updates
 - **Code Quality Metrics**: Automated scoring for documentation, tests, organization, and dependencies
 - **Comparative Analysis**: Compare multiple repositories across tech stack, architecture, and complexity
