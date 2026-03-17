@@ -52,6 +52,9 @@ class AnalysisSummary(Base):
     data_flow = Column(Text, nullable=False)
     confidence_score = Column(Float, default=0.8)
     
+    # Architecture diagram (Mermaid syntax, generated client-side — no API call)
+    architecture_diagram_mermaid = Column(Text)  # nullable; stores Mermaid syntax text
+
     # Metadata
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

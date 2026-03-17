@@ -172,22 +172,51 @@ class GeminiServiceV2:
             issue.get('title', '')
             for issue in (context.get('open_issues', [])[:10] + context.get('closed_issues', [])[:5])
         ]
+
+        dependencies = context.get('dependencies', {})
+        dep_frameworks = ", ".join(dependencies.get('frameworks', [])) if dependencies else "None detected"
+        dep_libraries = ", ".join(dependencies.get('libraries', [])) if dependencies else "None detected"
+        dep_languages = ", ".join(dependencies.get('languages', [])) if dependencies else "None detected"
+
+        architecture_hints = context.get('architecture_hints', {})
+        arch_pattern = architecture_hints.get('pattern', 'Unknown')
+        arch_conf = architecture_hints.get('confidence', 0.0)
+        arch_indicators = ", ".join(architecture_hints.get('indicators', [])) if architecture_hints else "None"
+
+        # Include code snippets (limited by pre-truncation in analysis service)
+        code_snippets = []
+        for path, content in context.get('file_contents', {}).items():
+            snippet = content[:10000]
+            code_snippets.append(f"### {path}\n{snippet}")
+        code_section = "\n\n".join(code_snippets) if code_snippets else "No code content available"
         
         prompt = f"""Analyze this GitHub repository and return ONLY valid JSON (no markdown, no prose).
 
 Repository: {repo_name}
 Primary Language: {primary_lang}
 
-README (first 3000 chars):
+README (first 3000 chars, weight 20%):
 {readme}
 
-Key Files:
+Code Structure (weight 30%):
 {files_list}
 
 Configuration Files: {', '.join(config_files) if config_files else 'None detected'}
 Entry Points: {', '.join(entry_files) if entry_files else 'Not identified'}
 
-GitHub Issues: {issues_summary}
+Code Content (weight 25%):
+{code_section}
+
+Dependencies (weight 20%):
+Frameworks: {dep_frameworks}
+Libraries: {dep_libraries}
+Languages: {dep_languages}
+
+Architecture Hints (structure-only, non-LLM):
+Pattern: {arch_pattern} (confidence {arch_conf})
+Indicators: {arch_indicators}
+
+GitHub Issues (weight 5%): {issues_summary}
 Recent Issue Patterns: {', '.join(issue_titles[:5]) if issue_titles else 'No issues'}
 
 CRITICAL REQUIREMENTS:
@@ -248,7 +277,8 @@ Return JSON with these exact keys:
   "confidence_score": 0.9
 }}
 
-Analyze based on README and file structure. Use evidence only. Be concise. Return valid JSON only.
+If README is missing or thin, use structure + dependencies + code content to infer everything. Assign confidence based on data quality, not README presence.
+Analyze using the weighted sources above. Use evidence only. Be concise. Return valid JSON only.
 """
         return prompt
     

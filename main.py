@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 from slowapi.errors import RateLimitExceeded
 
 from db.database import init_db
+from db.migration import add_diagram_column
 from routes.api import router
 from utils.rate_limiter import get_limiter
 from utils.logger import get_logger
@@ -39,6 +40,7 @@ async def lifespan(app: FastAPI):
     
     print("\n📊 Initializing database...")
     await init_db()
+    await add_diagram_column()   # safe no-op if column already exists
     print("✅ Database initialized successfully")
     
     # Print configuration
@@ -151,6 +153,6 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=port,
         reload=True,
+        reload_dirs=["routes", "services", "models", "utils", "db"],
         log_level="info"
     )
-    

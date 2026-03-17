@@ -9,6 +9,9 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Mermaid.js v10 – client-side diagram rendering, zero server cost -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'loose' });</script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=blauer:wght@300;400;500;600;700&display=swap');
 
@@ -349,6 +352,86 @@
                 return response.json();
             }
         };
+
+        // Architecture Diagram Component (client-side Mermaid rendering)
+        function ArchitectureDiagram({ syntax }) {
+            const containerRef = useRef(null);
+            const [renderError, setRenderError] = React.useState(null);
+            const [isRendering, setIsRendering] = React.useState(true);
+
+            useEffect(() => {
+                if (!syntax || !containerRef.current) return;
+
+                let cancelled = false;
+
+                const renderDiagram = async () => {
+                    try {
+                        setIsRendering(true);
+                        setRenderError(null);
+
+                        // Unique ID required by Mermaid
+                        const id = `mermaid-diagram-${Date.now()}`;
+                        const { svg } = await mermaid.render(id, syntax);
+
+                        if (!cancelled && containerRef.current) {
+                            containerRef.current.innerHTML = svg;
+
+                            // Make the SVG fill its container nicely
+                            const svgEl = containerRef.current.querySelector('svg');
+                            if (svgEl) {
+                                svgEl.style.width = '100%';
+                                svgEl.style.height = 'auto';
+                                svgEl.style.maxWidth = '100%';
+                                svgEl.removeAttribute('height');
+                            }
+
+                            setIsRendering(false);
+                        }
+                    } catch (err) {
+                        if (!cancelled) {
+                            setRenderError('Diagram rendering unavailable.');
+                            setIsRendering(false);
+                        }
+                    }
+                };
+
+                renderDiagram();
+                return () => { cancelled = true; };
+            }, [syntax]);
+
+            return (
+                <div className="bg-gradient-to-br from-slate-900 to-violet-950 rounded-2xl p-8 shadow-lg border border-violet-700/40 mb-6">
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="w-10 h-10 bg-violet-500/20 rounded-xl flex items-center justify-center">
+                            <LayersIcon />
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-bold text-white">Architecture Diagram</h3>
+                            <p className="text-violet-300 text-sm">Generated from analysis • No API calls</p>
+                        </div>
+                    </div>
+
+                    {isRendering && !renderError && (
+                        <div className="flex items-center justify-center py-12 gap-3 text-violet-300">
+                            <LoaderIcon />
+                            <span className="text-sm">Rendering diagram...</span>
+                        </div>
+                    )}
+
+                    {renderError && (
+                        <div className="p-4 bg-red-900/20 rounded-xl border border-red-500/30 text-red-300 text-sm">
+                            {renderError}
+                        </div>
+                    )}
+
+                    <div
+                        ref={containerRef}
+                        className="overflow-x-auto"
+                        style={{ display: isRendering ? 'none' : 'block' }}
+                    />
+                </div>
+            );
+        }
 
         // Landing Page Component
         function LandingPage({ onAnalyze }) {
@@ -989,6 +1072,11 @@
                                         {activeTab === 'architecture' && (
                                             <div>
                                                 <h2 className="text-3xl font-bold text-slate-800 mb-8">Architecture Overview</h2>
+
+                                                {/* ── Mermaid Diagram Card ─────────────────────────────── */}
+                                                {analysisData.architecture_diagram && (
+                                                    <ArchitectureDiagram syntax={analysisData.architecture_diagram} />
+                                                )}
 
                                                 <div className="bg-white rounded-2xl p-8 shadow-sm border border-purple-100 mb-6">
                                                     <h3 className="text-xl font-bold text-slate-800 mb-4">Pattern</h3>

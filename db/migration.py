@@ -83,3 +83,25 @@ async def check_schema_version():
         else:
             print("! No schema detected")
             return None
+
+
+async def add_diagram_column():
+    """
+    Idempotent migration: adds `architecture_diagram_mermaid` TEXT column
+    to the `analysis_summary` table if it does not already exist.
+
+    Safe to run on every startup — does nothing when the column already exists.
+    """
+    async with engine.begin() as conn:
+        # Check existing columns via PRAGMA
+        result = await conn.execute(text("PRAGMA table_info(analysis_summary);"))
+        columns = [row[1] for row in result.fetchall()]   # row[1] = column name
+
+        if "architecture_diagram_mermaid" not in columns:
+            await conn.execute(text(
+                "ALTER TABLE analysis_summary "
+                "ADD COLUMN architecture_diagram_mermaid TEXT;"
+            ))
+            print("✓ Added architecture_diagram_mermaid column to analysis_summary")
+        else:
+            print("✓ architecture_diagram_mermaid column already exists")

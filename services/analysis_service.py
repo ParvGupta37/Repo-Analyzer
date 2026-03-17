@@ -9,7 +9,7 @@ Guarantees:
 import uuid
 import json
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +21,8 @@ from models.schemas import (
 )
 from services.github_service import GitHubService
 from services.gemini_service import GeminiServiceV2, RepositoryAnalysis
+from services.dependency_analyzer import DependencyAnalyzer
+from services.diagram_generator import DiagramGenerator
 from utils.file_filter import FileFilter
 
 
@@ -33,6 +35,8 @@ class AnalysisServiceFinal:
         self.github = GitHubService()
         self.gemini = GeminiServiceV2()
         self.file_filter = FileFilter()
+        self.dependency_analyzer = DependencyAnalyzer()
+        self.diagram_generator = DiagramGenerator()
     
     async def start_analysis(self, repo_url: str, db: AsyncSession) -> Dict:
         """
@@ -148,10 +152,11 @@ class AnalysisServiceFinal:
             
             # Fetch limited file contents
             file_contents = {}
-            for file_info in important_files[:10]:
+            prioritized_files = self._prioritize_files_for_content(important_files)
+            for file_info in prioritized_files[:20]:
                 content = await self.github.get_file_content(owner, repo_name, file_info['path'])
-                if content and len(content) < 10000:
-                    file_contents[file_info['path']] = content[:2000]
+                if content:
+                    file_contents[file_info['path']] = content[:10000]
             
             # Fetch issues
             open_issues = await self.github.get_issues(owner, repo_name, state="open", max_issues=30)
@@ -178,7 +183,9 @@ class AnalysisServiceFinal:
                 'source_files': [f for f in important_files if f['role'] in ['source_code', 'entry_point']],
                 'file_contents': file_contents,
                 'open_issues': open_issues,
-                'closed_issues': closed_issues
+                'closed_issues': closed_issues,
+                'dependencies': self.dependency_analyzer.analyze_dependencies(file_contents),
+                'architecture_hints': self._infer_architecture_from_structure(important_files)
             }
             
             # ================================================================
@@ -191,6 +198,18 @@ class AnalysisServiceFinal:
             analysis: RepositoryAnalysis = await self.gemini.analyze_repository(context)
             
             print(f"✓ Received structured analysis (confidence: {analysis.confidence_score})")
+
+            # ================================================================
+            # STEP 3.5: Generate Mermaid diagram (pure Python — ZERO API calls)
+            # ================================================================
+
+            print("🎨 Generating architecture diagram (Mermaid)...")
+            diagram_syntax = self.diagram_generator.generate_mermaid_diagram({
+                'components': analysis.components,
+                'tech_stack':  analysis.tech_stack,
+                'data_flow':   analysis.data_flow,
+            })
+            print("✓ Mermaid diagram generated")
             
             # ================================================================
             # STEP 4: Store in database (split tables)
@@ -211,6 +230,7 @@ class AnalysisServiceFinal:
                 existing_summary.architecture_pattern = analysis.architecture_pattern
                 existing_summary.data_flow = analysis.data_flow
                 existing_summary.confidence_score = analysis.confidence_score
+                existing_summary.architecture_diagram_mermaid = diagram_syntax
                 existing_summary.updated_at = datetime.utcnow()
             else:
                 # Create new
@@ -220,7 +240,8 @@ class AnalysisServiceFinal:
                     purpose=analysis.purpose,
                     architecture_pattern=analysis.architecture_pattern,
                     data_flow=analysis.data_flow,
-                    confidence_score=analysis.confidence_score
+                    confidence_score=analysis.confidence_score,
+                    architecture_diagram_mermaid=diagram_syntax,
                 )
                 db.add(summary)
             
@@ -396,6 +417,56 @@ class AnalysisServiceFinal:
             print(f"✗ Background analysis error: {str(e)}")
             import traceback
             traceback.print_exc()
+
+    def _prioritize_files_for_content(self, files: List[Dict]) -> List[Dict]:
+        """Prioritize entry points and config files before other sources."""
+        entry_points = [f for f in files if f.get('role') == 'entry_point']
+        config_files = [f for f in files if f.get('role') == 'configuration']
+        others = [f for f in files if f.get('role') not in ['entry_point', 'configuration']]
+        return entry_points + config_files + others
+
+    def _infer_architecture_from_structure(self, files: List[Dict]) -> Dict:
+        """Infer architecture pattern from folder structure only."""
+        paths = [f.get('path', '') for f in files]
+        dir_names = set()
+        top_level = set()
+
+        for path in paths:
+            parts = [p for p in path.split('/') if p]
+            if len(parts) > 1:
+                top_level.add(parts[0].lower())
+                dir_names.update([p.lower() for p in parts[:-1]])
+
+        indicators = []
+        pattern = "Unknown"
+        confidence = 0.5
+
+        mvc_hits = [n for n in ["models", "views", "controllers"] if n in dir_names]
+        if len(mvc_hits) >= 2:
+            pattern = "MVC"
+            confidence = 0.7 if len(mvc_hits) == 2 else 0.85
+            indicators.append(f"folders: {', '.join(sorted(mvc_hits))}")
+
+        service_like = [d for d in top_level if "service" in d or d in ["services", "gateway"]]
+        if len(service_like) >= 2:
+            pattern = "Microservices"
+            confidence = max(confidence, 0.8)
+            indicators.append(f"top-level services: {', '.join(sorted(service_like))}")
+
+        layered_hits = [n for n in ["controllers", "services", "repositories", "domain", "infrastructure"] if n in dir_names]
+        if len(layered_hits) >= 3 and pattern == "Unknown":
+            pattern = "Layered"
+            confidence = 0.75
+            indicators.append(f"layers: {', '.join(sorted(layered_hits))}")
+
+        if pattern == "Unknown":
+            indicators.append("no strong structural pattern detected")
+
+        return {
+            "pattern": pattern,
+            "confidence": round(confidence, 2),
+            "indicators": indicators
+        }
     
     async def get_status(self, repo_id: str, db: AsyncSession) -> Dict:
         """Get analysis status for a repository."""
@@ -497,6 +568,7 @@ class AnalysisServiceFinal:
             "architecture_pattern": summary.architecture_pattern,
             "data_flow": summary.data_flow,
             "confidence_score": summary.confidence_score,
+            "architecture_diagram": summary.architecture_diagram_mermaid,
             "tech_stack": tech_stack,
             "components": components,
             "key_files": key_files,
