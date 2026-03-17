@@ -9,7 +9,7 @@ A complete backend system that analyzes GitHub repositories to help new develope
 - **AI-Powered Insights**: Uses Gemini LLM to generate:
   - Project overview
   - Tech stack analysis with reasoning
-  - Architecture summary
+  - Architecture summary along with Architecture diagram
   - Issues-based insights
   - Contributor guide for new developers
 - **Intelligent File Filtering**: Focuses on important files (entry points, configs, core modules)
@@ -37,27 +37,6 @@ A complete backend system that analyzes GitHub repositories to help new develope
 - **LLM**: Gemini 3 (Flash or Pro, with mock fallback)
 - **HTTP Client**: httpx for GitHub API
 - **Validation**: Pydantic
-
-## System Architecture
-
-```
-repo-analyzer/
-├── main.py                 # FastAPI application entry point
-├── db/
-│   └── database.py         # Database configuration and session management
-├── models/
-│   ├── schemas.py          # SQLAlchemy models (database schema)
-│   └── pydantic_models.py  # Pydantic models (API validation)
-├── services/
-│   ├── github_service.py   # GitHub API integration
-│   ├── gemini_service.py   # Gemini LLM integration (with mock fallback)
-│   └── analysis_service.py # Main analysis orchestration
-├── routes/
-│   └── api.py             # API endpoints
-├── utils/
-│   └── file_filter.py     # File filtering and prioritization
-└── requirements.txt       # Python dependencies
-```
 
 ## Database Schema
 
